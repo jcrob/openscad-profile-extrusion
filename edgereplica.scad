@@ -79,11 +79,13 @@ function edge_stem_half_width_at(depth_below_underside) =
 // Bar length along +Z. Thicker toward stem at the body end (z = 0 local).
 // toward_stem_sign: +1 grows in +X, -1 grows in -X.
 module edge_tapered_stem_gripper_bar(bar_len, bar_width, bar_height, lip_taper, toward_stem_sign = 1) {
+    // Extend slightly above y=0 so the bar unions into the top face cleanly.
+    h = bar_height + edge_gripper_body_overlap;
     hull() {
         translate([toward_stem_sign < 0 ? -lip_taper : 0, -bar_height, 0])
-            cube([bar_width + lip_taper, bar_height, 0.02]);
+            cube([bar_width + lip_taper, h, 0.02]);
         translate([0, -bar_height, bar_len - 0.02])
-            cube([bar_width, bar_height, 0.02]);
+            cube([bar_width, h, 0.02]);
     }
 }
 
@@ -132,12 +134,18 @@ module edgereplica(length = edge_default_length, stem_gripper_sides = 0) {
     assert(stem_gripper_sides == 0 || stem_gripper_sides == 1 || stem_gripper_sides == 2,
         "stem_gripper_sides must be 0, 1, or 2");
 
-    linear_extrude(height = length, convexity = 4)
-        polygon(points = edge_profile_points);
+    union() {
+        linear_extrude(height = length, convexity = 4)
+            polygon(points = edge_profile_points);
 
-    if (stem_gripper_sides >= 1)
-        edge_end_stem_gripper_assembly(z_pos = -edge_gripper_len);
+        if (stem_gripper_sides >= 1)
+            edge_end_stem_gripper_assembly(
+                z_pos = -edge_gripper_len + edge_gripper_body_overlap
+            );
 
-    if (stem_gripper_sides >= 2)
-        edge_end_stem_gripper_assembly(z_pos = length);
+        if (stem_gripper_sides >= 2)
+            edge_end_stem_gripper_assembly(
+                z_pos = length - edge_gripper_body_overlap
+            );
+    }
 }
