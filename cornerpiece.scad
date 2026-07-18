@@ -34,8 +34,6 @@ gripper_len                 = outer_lip_bottom_grip_len;
 // Channel sized to stem root; slight taper for friction fit when sliding on.
 gripper_entry_clearance     = 0.20;  // extra gap at rim (slide-on entry)
 gripper_friction_interfere  = 0.12;  // tighter gap at grip top (press fit)
-gripper_along_y_center_x    = ridge_offset_xy;
-gripper_along_x_center_y    = ridge_offset_xy;
 gripper_y_pos               = cornersquare_len - 0.5 * outer_lip_grip_len;
 gripper_x_pos               = cornersquare_len - 0.5 * outer_lip_grip_len;
 
@@ -67,19 +65,31 @@ show_edge_fit_preview       = true;
 edge_preview_length         = cornersquare_len + outer_lip_bottom_grip_len;
 edge_preview_color          = "SteelBlue";
 edge_preview_alpha          = 0.45;
-// Stem drops in +Z into the gripper channel from the underside of the top bar.
-edge_preview_stem_drop      = edge_left_flat_t;
 
 // ---------------------------------------------------------------------------
-// Derived stem-gripper channel
+// Derived layout — rim, edge flush, stem grippers
 // ---------------------------------------------------------------------------
+inner_rim_origin = ridge_offset_xy - 0.5 * inner_rim_width;
+ridge_top_z      = cornersquare_rim_height + cornersquare_ridge_height;
+
+// One edgereplica per half: profile x=0 (inner edge) flush with inner rim.
+edge_preview_inner_x = inner_rim_origin;
+// After Rx(90): world_z = profile_y + translate_z → flange bottom on ridge tops.
+edge_preview_z = ridge_top_z + edge_left_flange_h;
+// Rx(90) extrudes in -Y, so start at +length and run back through the arm.
+edge_preview_y = gripper_y_pos + edge_preview_length;
+
+// Stem world X when inner edge is flush with the rim; grippers center on it.
+edge_stem_world_x         = edge_preview_inner_x + edge_tip_center_x;
+gripper_along_y_center_x  = edge_stem_world_x;
+gripper_along_x_center_y  = edge_stem_world_x;
+
 gripper_gap_entry = edge_stem_root_w + gripper_entry_clearance;
 gripper_gap_seat  = edge_stem_root_w - gripper_friction_interfere;
 gripper_taper_in  = (gripper_gap_entry - gripper_gap_seat) / 2;
 
 outer_lip_sit_xy = cornersquare_len + outer_lip_grip_len * outer_lip_sit_extra_scale;
 outer_lip_sit_z  = -outer_lip_gap_height + outer_lip_top_grip_height / 2;
-inner_rim_origin = ridge_offset_xy - 0.5 * inner_rim_width;
 
 // ---------------------------------------------------------------------------
 // Modules
@@ -230,37 +240,15 @@ module cornerhalf_with_pegs() {
     }
 }
 
-// Orient edgereplica so its stem drops into the Y-direction gripper channel.
-// Profile: +X along top bar, -Y along stem → after Rx(-90), stem is +Z.
-// Extrusion runs along world +Y through the gripper length.
-module edgereplica_in_y_gripper_channel() {
-    stem_center_x = edge_tip_center_x;
-    translate([
-        gripper_along_y_center_x - stem_center_x,
-        gripper_y_pos,
-        cornersquare_rim_height + edge_preview_stem_drop
-    ])
-    rotate([-90, 0, 0])
-        edgereplica(length = edge_preview_length);
-}
-
-// Same for the X-direction gripper channel (extrusion along world +X).
-module edgereplica_in_x_gripper_channel() {
-    stem_center_x = edge_tip_center_x;
-    translate([
-        gripper_x_pos,
-        gripper_along_x_center_y + stem_center_x,
-        cornersquare_rim_height + edge_preview_stem_drop
-    ])
-    rotate([-90, 0, -90])
-        edgereplica(length = edge_preview_length);
-}
-
+// Single edgereplica per corner half (mirror maps it onto the other arm).
+// - Inner edge (profile x=0) flush with inner rim
+// - Left-flange bottom sits on ridge tops
+// - Stem centered in the Y gripper channel
 module edge_fit_preview() {
-    color(edge_preview_color, edge_preview_alpha) {
-        edgereplica_in_y_gripper_channel();
-        edgereplica_in_x_gripper_channel();
-    }
+    color(edge_preview_color, edge_preview_alpha)
+    translate([edge_preview_inner_x, edge_preview_y, edge_preview_z])
+    rotate([90, 0, 0])
+        edgereplica(length = edge_preview_length);
 }
 
 // ---------------------------------------------------------------------------
