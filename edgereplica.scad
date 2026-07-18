@@ -36,9 +36,9 @@ edge_gripper_lip_taper       = 0.5;   // thicker toward the edge body on each ba
 // Cube on the top-width segment; mating top ridge slides into the slot
 // between this cube, the side grippers, and the stem.
 edge_top_ridge_grip_h        = 5.0;   // height above top surface (y=0)
-edge_top_ridge_grip_t        = 3.0;   // wall thickness of the top grip cube
 edge_top_ridge_slot_w        = 3.0;   // slide slot width for mating ridge
 edge_top_ridge_grip_inset_x  = 0.0;   // inset from profile x = top_width
+edge_gripper_body_overlap    = 0.05;  // merge end assemblies into extruded body
 
 edge_left_flange_tip_left = edge_left_flange_tip_right - edge_left_flange_tip_t;
 edge_stem_root_left       = edge_left_flange_t + edge_left_flat_w;
