@@ -97,7 +97,6 @@ gripper_along_x_center_y = edge_stem_world_x;
 // Derived stem-gripper channel
 // ---------------------------------------------------------------------------
 gripper_gap_entry = edge_stem_root_w + gripper_entry_clearance;
-gripper_gap_seat  = edge_stem_root_w - gripper_friction_interfere;
 
 outer_lip_sit_xy = cornersquare_len + outer_lip_grip_len * outer_lip_sit_extra_scale;
 outer_lip_sit_z  = -outer_lip_gap_height + outer_lip_top_grip_height / 2;
@@ -137,10 +136,7 @@ module stem_gripper_pair(
     z_pos,
     along_y = true
 ) {
-    // Gap at lip end is tighter by lip_taper on each side
-    neg_inner_lip = center_axis - gripper_gap_entry / 2 + gripper_lip_taper;
-    pos_inner_lip = center_axis + gripper_gap_entry / 2 - gripper_lip_taper;
-    // Far-end outer references use nominal gap (bars shrink away from stem)
+    // Far-end outer references use nominal gap (bars thicker toward stem at lip)
     neg_outer_far = center_axis - gripper_gap_entry / 2 - gripper_width;
     pos_inner_far = center_axis + gripper_gap_entry / 2;
 
