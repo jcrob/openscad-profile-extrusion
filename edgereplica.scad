@@ -118,8 +118,13 @@ module edge_top_ridge_grip_cube(z_pos = 0) {
     cube_w       = cube_right_x - cube_left_x;
 
     if (cube_w > 0)
-        translate([cube_left_x, 0, z_pos])
-            cube([cube_w, edge_top_ridge_grip_h, edge_gripper_len]);
+        // Sink slightly into the top face so the seat unions into the body.
+        translate([cube_left_x, -edge_gripper_body_overlap, z_pos])
+            cube([
+                cube_w,
+                edge_top_ridge_grip_h + edge_gripper_body_overlap,
+                edge_gripper_len
+            ]);
 }
 
 // Full end assembly: side stem grippers + top-ridge seat.
