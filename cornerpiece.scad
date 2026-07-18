@@ -70,14 +70,17 @@ edge_preview_alpha          = 0.45;
 // Derived layout — rim, edge flush, stem grippers
 // ---------------------------------------------------------------------------
 inner_rim_origin = ridge_offset_xy - 0.5 * inner_rim_width;
+// Green plane: top of the left/right inner-rim ridges
 ridge_top_z      = cornersquare_rim_height + cornersquare_ridge_height;
 
-// One edgereplica per half: profile x=0 (inner edge) flush with inner rim.
+// One edgereplica per half.
+// Profile x=0 (inner edge) flush with the inner rim face.
 edge_preview_inner_x = inner_rim_origin;
-// After Rx(90): world_z = profile_y + translate_z → flange bottom on ridge tops.
-edge_preview_z = ridge_top_z + edge_left_flange_h;
-// Rx(90) extrudes in -Y, so start at +length and run back through the arm.
-edge_preview_y = gripper_y_pos + edge_preview_length;
+// Correct orientation: Rx(-90) → stem in +Z, profile top face is world-bottom.
+// Red plane = bottom of edge (profile y=0) at translate_z.
+// Sit red plane on green plane (ridge tops):
+edge_preview_z = ridge_top_z;
+edge_preview_y = gripper_y_pos;
 
 // Stem world X when inner edge is flush with the rim; grippers center on it.
 edge_stem_world_x         = edge_preview_inner_x + edge_tip_center_x;
@@ -241,13 +244,13 @@ module cornerhalf_with_pegs() {
 }
 
 // Single edgereplica per corner half (mirror maps it onto the other arm).
-// - Inner edge (profile x=0) flush with inner rim
-// - Left-flange bottom sits on ridge tops
-// - Stem centered in the Y gripper channel
+// Orientation: Rx(-90), stem in +Z (same as the earlier correct preview).
+// Red plane (profile top / world-bottom) on green plane (ridge tops).
+// Inner edge (profile x=0) flush with the inner rim; stem in Y grippers.
 module edge_fit_preview() {
     color(edge_preview_color, edge_preview_alpha)
     translate([edge_preview_inner_x, edge_preview_y, edge_preview_z])
-    rotate([90, 0, 0])
+    rotate([-90, 0, 0])
         edgereplica(length = edge_preview_length);
 }
 
