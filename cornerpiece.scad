@@ -24,16 +24,14 @@ outer_lip_top_grip_height   = 2;
 outer_lip_grip_width        = 3;
 outer_lip_grip_len          = 5;
 outer_lip_bottom_grip_len   = 15;
-outer_lip_sit_extra_scale   = 0.8; // sit-on-ridge cube grows by grip_len * scale
+outer_lip_sit_extra_scale   = 0.8;
 
 /* [Stem grippers — straddle edgereplica stem] */
-// Height matches left flange on the edge profile.
 gripper_height              = edge_left_flange_h;
 gripper_width               = outer_lip_grip_width;
 gripper_len                 = outer_lip_bottom_grip_len;
-// Channel sized to stem root; slight taper for friction fit when sliding on.
-gripper_entry_clearance     = 0.20;  // extra gap at rim (slide-on entry)
-gripper_friction_interfere  = 0.12;  // tighter gap at grip top (press fit)
+gripper_entry_clearance     = 0.20;
+gripper_friction_interfere  = 0.12;
 gripper_y_pos               = cornersquare_len - 0.5 * outer_lip_grip_len;
 gripper_x_pos               = cornersquare_len - 0.5 * outer_lip_grip_len;
 
@@ -67,26 +65,32 @@ edge_preview_color          = "SteelBlue";
 edge_preview_alpha          = 0.45;
 
 // ---------------------------------------------------------------------------
-// Derived layout — rim, edge flush, stem grippers
+// Fit-alignment planes (from annotated preview)
 // ---------------------------------------------------------------------------
 inner_rim_origin = ridge_offset_xy - 0.5 * inner_rim_width;
-// Green plane: top of the left/right inner-rim ridges
-ridge_top_z      = cornersquare_rim_height + cornersquare_ridge_height;
 
-// One edgereplica per half.
-// Profile x=0 (inner edge) flush with the inner rim face.
-edge_preview_inner_x = inner_rim_origin;
-// Correct orientation: Rx(-90) → stem in +Z, profile top face is world-bottom.
-// Red plane = bottom of edge (profile y=0) at translate_z.
-// Sit red plane on green plane (ridge tops):
-edge_preview_z = ridge_top_z;
+// Green line: bottom of edgereplica body (profile y = 0) after Rx(-90)
+// Red line:   top of the corner lip / middle seat ridge (below the tall grippers)
+edge_seat_z = cornersquare_rim_height;
+
+// Black line: right-facing profile edge where stem prongs begin
+// Blue line:  left-facing face of the inner rim
+edge_flush_profile_x = edge_stem_root_left;
+edge_flush_world_x   = inner_rim_origin;
+
+// Placement from those planes (Rx(-90): world_z = tz - profile_y, world_x = tx + profile_x)
+edge_preview_x = edge_flush_world_x - edge_flush_profile_x;
 edge_preview_y = gripper_y_pos;
+edge_preview_z = edge_seat_z;
 
-// Stem world X when inner edge is flush with the rim; grippers center on it.
-edge_stem_world_x         = edge_preview_inner_x + edge_tip_center_x;
-gripper_along_y_center_x  = edge_stem_world_x;
-gripper_along_x_center_y  = edge_stem_world_x;
+// Stem / grippers follow the seated edge
+edge_stem_world_x        = edge_preview_x + edge_tip_center_x;
+gripper_along_y_center_x = edge_stem_world_x;
+gripper_along_x_center_y = edge_stem_world_x;
 
+// ---------------------------------------------------------------------------
+// Derived stem-gripper channel
+// ---------------------------------------------------------------------------
 gripper_gap_entry = edge_stem_root_w + gripper_entry_clearance;
 gripper_gap_seat  = edge_stem_root_w - gripper_friction_interfere;
 gripper_taper_in  = (gripper_gap_entry - gripper_gap_seat) / 2;
@@ -98,8 +102,6 @@ outer_lip_sit_z  = -outer_lip_gap_height + outer_lip_top_grip_height / 2;
 // Modules
 // ---------------------------------------------------------------------------
 
-// Single gripper bar; inner face leans into the stem channel over height.
-// toward_stem_sign: +1 if stem is in +axis of bar's thickness, -1 if in -axis.
 module tapered_stem_gripper_bar(bar_len, bar_width, bar_height, taper_in, toward_stem_sign = 1) {
     hull() {
         cube([bar_width, bar_len, 0.02]);
@@ -108,7 +110,6 @@ module tapered_stem_gripper_bar(bar_len, bar_width, bar_height, taper_in, toward
     }
 }
 
-// Tapered bar with length along X (for X-direction ridge grippers).
 module tapered_stem_gripper_bar_x(bar_len, bar_width, bar_height, taper_in, toward_stem_sign = 1) {
     hull() {
         cube([bar_len, bar_width, 0.02]);
@@ -117,8 +118,6 @@ module tapered_stem_gripper_bar_x(bar_len, bar_width, bar_height, taper_in, towa
     }
 }
 
-// Pair of tapered bars with stem channel centered on center_axis.
-// along_y=true: bars extend in +Y, channel gap is along X.
 module stem_gripper_pair(
     center_axis,
     along_pos,
@@ -130,26 +129,22 @@ module stem_gripper_pair(
 
     translate([0, 0, z_pos])
     if (along_y) {
-        // -X bar (stem toward +X)
         translate([neg_inner_entry - gripper_width, along_pos, 0])
             tapered_stem_gripper_bar(
                 gripper_len, gripper_width, gripper_height,
                 gripper_taper_in, toward_stem_sign = 1
             );
-        // +X bar (stem toward -X)
         translate([pos_inner_entry, along_pos, 0])
             tapered_stem_gripper_bar(
                 gripper_len, gripper_width, gripper_height,
                 gripper_taper_in, toward_stem_sign = -1
             );
     } else {
-        // -Y bar (stem toward +Y)
         translate([along_pos, neg_inner_entry - gripper_width, 0])
             tapered_stem_gripper_bar_x(
                 gripper_len, gripper_width, gripper_height,
                 gripper_taper_in, toward_stem_sign = 1
             );
-        // +Y bar (stem toward -Y)
         translate([along_pos, pos_inner_entry, 0])
             tapered_stem_gripper_bar_x(
                 gripper_len, gripper_width, gripper_height,
@@ -184,7 +179,6 @@ module cornerhalf_solid() {
         corner_inner_rim();
         corner_sit_on_ridge();
 
-        // Ridge grippers: slide onto either side of edgereplica stem
         stem_gripper_pair(
             center_axis = gripper_along_y_center_x,
             along_pos   = gripper_y_pos,
@@ -243,13 +237,11 @@ module cornerhalf_with_pegs() {
     }
 }
 
-// Single edgereplica per corner half (mirror maps it onto the other arm).
-// Orientation: Rx(-90), stem in +Z (same as the earlier correct preview).
-// Red plane (profile top / world-bottom) on green plane (ridge tops).
-// Inner edge (profile x=0) flush with the inner rim; stem in Y grippers.
+// One edgereplica per corner half (mirror places the other arm).
+// Shape/orientation from the closest prior preview: Rx(-90), stem in +Z.
 module edge_fit_preview() {
     color(edge_preview_color, edge_preview_alpha)
-    translate([edge_preview_inner_x, edge_preview_y, edge_preview_z])
+    translate([edge_preview_x, edge_preview_y, edge_preview_z])
     rotate([-90, 0, 0])
         edgereplica(length = edge_preview_length);
 }
