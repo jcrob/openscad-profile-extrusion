@@ -209,21 +209,22 @@ module edge_run_z(z0, seg_len, remove_right_rim = false) {
 }
 
 // Perpendicular run along -X (into lid / flange side).
+// Starts slightly in +X so it unions into the main edge body.
 // flange_at_z: Z of the flange face; rim extends away from the bay.
-// rim_toward_neg_z: near wall (rim at lower Z) vs far wall (rim at higher Z).
 module edge_run_neg_x(z_flange, seg_len, rim_toward_neg_z = true, remove_right_rim = false) {
+    joint = 0.05;
     if (seg_len > 0.01)
-        translate([0, 0, z_flange])
+        translate([joint, 0, z_flange])
         rotate([0, -90, 0])
         mirror([0, 0, rim_toward_neg_z ? 1 : 0])
-            edge_profile_extrude(seg_len, remove_right_rim);
+            edge_profile_extrude(seg_len + joint, remove_right_rim);
 }
 
 module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_center) {
     zc = is_undef(z_center) ? length / 2 : z_center;
     z0 = zc - bay_len / 2;
     z1 = zc + bay_len / 2;
-    joint = 0.05; // slight overlap so walls union into one solid
+    joint = 0.05;
 
     assert(z0 >= 0 && z1 <= length,
         "lid ingress bay must fit within edge length");
@@ -234,14 +235,11 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
         edge_run_z(z1 - joint, length - z1 + joint, false);
 
         // Three flange+stem edges of the ingress U (open toward -X)
-        // 1) near wall — overlaps main run and back wall
-        edge_run_neg_x(z0, depth + joint, rim_toward_neg_z = true, remove_right_rim);
-        // 2) back wall — flange faces into the bay (+X); optional no glass rim
-        translate([-depth, 0, z0 - joint])
+        edge_run_neg_x(z0, depth, rim_toward_neg_z = true, remove_right_rim);
+        translate([-depth + joint, 0, z0 - joint])
         mirror([1, 0, 0])
             edge_run_z(0, bay_len + 2 * joint, remove_right_rim);
-        // 3) far wall
-        edge_run_neg_x(z1, depth + joint, rim_toward_neg_z = false, remove_right_rim);
+        edge_run_neg_x(z1, depth, rim_toward_neg_z = false, remove_right_rim);
     }
 }
 
