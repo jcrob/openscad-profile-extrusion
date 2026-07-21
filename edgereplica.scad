@@ -218,16 +218,15 @@ module edge_run_neg_x(z_flange, seg_len, rim_toward_neg_z = true, remove_right_r
     if (seg_len > 0.01) {
         if (rim_toward_neg_z) {
             // Near wall: flange at z_flange, rim toward -Z (outside bay).
-            // Ry(90) maps extrude +Z → +X and profile X → -Z; shift so run is -X.
-            translate([-seg_len + joint, 0, z_flange])
+            // Extend slightly past both ends for union into main edge + back wall.
+            translate([-seg_len - joint, 0, z_flange])
             rotate([0, 90, 0])
-                edge_profile_extrude(seg_len + joint, remove_right_rim);
+                edge_profile_extrude(seg_len + 2 * joint, remove_right_rim);
         } else {
             // Far wall: flange at z_flange, rim toward +Z (outside bay).
-            // Ry(-90) maps extrude +Z → -X and profile X → +Z.
             translate([joint, 0, z_flange])
             rotate([0, -90, 0])
-                edge_profile_extrude(seg_len + joint, remove_right_rim);
+                edge_profile_extrude(seg_len + 2 * joint, remove_right_rim);
         }
     }
 }
@@ -242,21 +241,18 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
         "lid ingress bay must fit within edge length");
 
     union() {
-        // Main edge before / after the bay — stop at the flange plane of each
-        // side wall so inner flanges meet at an L without overlapping.
+        // Main edge before / after the bay — flange plane meets side-arm flanges.
         edge_run_z(0, z0 + joint, false);
         edge_run_z(z1 - joint, length - z1 + joint, false);
 
-        // Side arms: translate in -X to meet the parallel main-edge flange (x=0).
-        // Flange on the bay-inside corner for continuous spline.
+        // Side arms in -X: connect to main flange at x=0; flange on bay inside.
         edge_run_neg_x(z0, depth, rim_toward_neg_z = true, remove_right_rim);
         edge_run_neg_x(z1, depth, rim_toward_neg_z = false, remove_right_rim);
 
-        // Back wall at bay depth — flange faces into the bay (+X).
-        // Z spans the bay so spline L-corners meet the side-arm flanges.
-        translate([-depth + joint, 0, z0])
+        // Back wall — flange faces into the bay (+X); overlaps side-arm ends.
+        translate([-depth - joint, 0, z0 - joint])
         mirror([1, 0, 0])
-            edge_run_z(0, bay_len, remove_right_rim);
+            edge_run_z(0, bay_len + 2 * joint, remove_right_rim);
     }
 }
 
