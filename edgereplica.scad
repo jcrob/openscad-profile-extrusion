@@ -39,6 +39,7 @@ edge_top_ridge_grip_h        = 5.0;   // height above top surface (y=0)
 edge_top_ridge_slot_w        = 3.0;   // slide slot width for mating ridge
 edge_top_ridge_grip_inset_x  = 0.0;   // inset from profile x = top_width
 edge_gripper_body_overlap    = 0.05;  // merge end assemblies into extruded body
+edge_gripper_body_overlap_z  = 5;
 
 edge_left_flange_tip_left = edge_left_flange_tip_right - edge_left_flange_tip_t;
 edge_stem_root_left       = edge_left_flange_t + edge_left_flat_w;
@@ -95,7 +96,7 @@ module edge_stem_gripper_pair(z_pos = 0) {
     neg_outer_far = center_axis - edge_gripper_gap_entry / 2 - edge_gripper_width;
     pos_inner_far = center_axis + edge_gripper_gap_entry / 2;
 
-    translate([0, 0, z_pos]) {
+    translate([0, -edge_top_thickness, z_pos]) {
         translate([neg_outer_far, 0, 0])
             edge_tapered_stem_gripper_bar(
                 edge_gripper_len, edge_gripper_width, edge_gripper_height,
@@ -119,16 +120,12 @@ module edge_top_ridge_grip_cube(z_pos = 0) {
 
     if (cube_w > 0)
         // Sink slightly into the top face so the seat unions into the body.
-        translate([cube_left_x, -edge_gripper_body_overlap, z_pos])
-            cube([
-                cube_w,
-                edge_top_ridge_grip_h + edge_gripper_body_overlap,
-                edge_gripper_len
-            ]);
+        translate([0, -edge_gripper_body_overlap, z_pos])
+            cube([edge_top_width, cube_w, edge_gripper_len]);
 }
 
 // Full end assembly: side stem grippers + top-ridge seat.
-module edge_end_stem_gripper_assembly(z_pos = 0) {
+module edge_end_stem_gripper_assembly(z_pos = -2) {
     edge_stem_gripper_pair(z_pos = z_pos);
     edge_top_ridge_grip_cube(z_pos = z_pos);
 }
@@ -145,12 +142,12 @@ module edgereplica(length = edge_default_length, stem_gripper_sides = 0) {
 
         if (stem_gripper_sides >= 1)
             edge_end_stem_gripper_assembly(
-                z_pos = -edge_gripper_len + edge_gripper_body_overlap
+                z_pos = -edge_gripper_len + edge_gripper_body_overlap + edge_gripper_body_overlap_z
             );
 
         if (stem_gripper_sides >= 2)
             edge_end_stem_gripper_assembly(
-                z_pos = length - edge_gripper_body_overlap
+                z_pos = length - edge_gripper_body_overlap - edge_gripper_body_overlap_z
             );
     }
 }
