@@ -194,9 +194,11 @@ module edge_cord_under_cut(length, gap_len, keep_below) {
 }
 
 // ---------------------------------------------------------------------------
-// 3) Lid ingress — three flange+stem edges forming a U bay
-//     All corners are 45° miters so the profile (and spline channel) is continuous.
-//     Outer silhouette is a square L at each corner; the joint face is the 45° diagonal.
+// 3) Lid ingress — U bay with continuous main rim and outer flange path
+//
+// Blue: main glass rim stays a solid continuous edge (not miter-notched).
+// Red:  left flange+stem follows the outer perimeter of the U.
+// Black: no flange on the bay-inner side at the main↔arm junctions.
 // ---------------------------------------------------------------------------
 
 edge_miter_w = edge_top_width; // stock past each corner for the 45° cut
@@ -212,15 +214,14 @@ module edge_profile_extrude(seg_len, remove_right_rim = false) {
 // 45° half-space cutter in the XZ (top) plane through (cx, cz).
 // rot_y = 45  → plane (x-cx)+(z-cz)=0
 // rot_y = -45 → plane (x-cx)-(z-cz)=0
-// flip=false removes the local +Z half of that plane; flip=true removes the other.
-// pull>0 keeps a thin sliver past the plane so mating miters volumetrically overlap.
+// flip=false removes the local +Z half; flip=true removes the other.
+// pull>0 keeps a thin sliver past the plane so mating miters overlap.
 module edge_miter_slab(cx, cz, rot_y, flip = false, pull = 0.05) {
     big = edge_top_width * 4 + edge_ingress_depth + edge_default_length + 20;
-    // Shift slab away from the kept side by `pull` so the solid slightly crosses the plane.
-    z0 = (flip ? -big : 0) + (flip ? -pull : pull);
+    z_off = (flip ? -big : 0) + (flip ? -pull : pull);
     translate([cx, -edge_overall_height - 1, cz])
     rotate([0, rot_y, 0])
-    translate([-big / 2, 0, z0])
+    translate([-big / 2, 0, z_off])
         cube([big, edge_overall_height + edge_top_ridge_grip_h + 10, big]);
 }
 
@@ -231,7 +232,7 @@ module edge_run_z(z0, seg_len, remove_right_rim = false) {
             edge_profile_extrude(seg_len, remove_right_rim);
 }
 
-// Perpendicular run along -X. Flange at z_flange; rim outside the bay.
+// Perpendicular run along -X. Flange at z_flange; rim on the other Z side.
 module edge_run_neg_x(z_flange, seg_len, rim_toward_neg_z = true, remove_right_rim = false) {
     if (seg_len > 0.01) {
         if (rim_toward_neg_z) {
@@ -246,59 +247,48 @@ module edge_run_neg_x(z_flange, seg_len, rim_toward_neg_z = true, remove_right_r
     }
 }
 
-// Near main (z < z0): outer L at (W, z0-W); diagonal (0,z0)→(W,z0-W).
-module edge_ingress_main_before(z0) {
-    difference() {
-        edge_run_z(0, z0 + edge_miter_w, false);
-        // Keep x+(z-z0) <= 0
-        edge_miter_slab(0, z0, 45, flip = false);
-    }
+// Open the bay through the main edge: keep glass rim (blue), remove flange+stem.
+// Inset slightly in Z so side arms volumetrically overlap the remaining flange lips.
+module edge_ingress_bay_opening_cut(z0, bay_len) {
+    joint = 0.05;
+    translate([-0.01, -edge_overall_height - 0.01, z0 + joint])
+        cube([edge_stem_root_right + 0.02, edge_overall_height + 0.02, bay_len - 2 * joint]);
 }
 
-// Far main (z > z1): outer L at (W, z1+W); diagonal (0,z1)→(W,z1+W).
-module edge_ingress_main_after(length, z1) {
-    difference() {
-        edge_run_z(z1 - edge_miter_w, length - z1 + edge_miter_w, false);
-        // Keep x-(z-z1) <= 0  (body toward +Z)
-        edge_miter_slab(0, z1, -45, flip = true);
-    }
-}
-
-// Near arm: flange at z0, rim toward -Z; miters at main and back.
+// Near arm: flange on outer red path at z=z0 (faces -Z); rim into bay (+Z). Black: no inner flange.
+// Square into the main at x=0 (main rim stays solid blue); 45° miter only at the back corner.
 module edge_ingress_arm_near(z0, depth, remove_right_rim) {
     mw = edge_ingress_profile_w(remove_right_rim);
+    joint = 0.05;
     difference() {
-        translate([mw, 0, 0])
-            edge_run_neg_x(z0, depth + 2 * mw, true, remove_right_rim);
-        // Main corner: same plane/side as main_before
-        edge_miter_slab(0, z0, 45, flip = false);
-        // Back corner: keep (x+depth)-(z-z0) >= 0
+        // Overlap into main flange lip (x>0) for a clean union; extra stock past back for miter
+        // rim_toward_neg_z=false → flange at z0, rim into bay (+Z)
+        translate([joint, 0, 0])
+            edge_run_neg_x(z0, depth + mw + joint, false, remove_right_rim);
         edge_miter_slab(-depth, z0, -45, flip = false);
     }
 }
 
-// Far arm: flange at z1, rim toward +Z; miters at main and back.
+// Far arm: flange on outer red path at z=z1 (faces +Z); rim into bay (-Z).
 module edge_ingress_arm_far(z1, depth, remove_right_rim) {
     mw = edge_ingress_profile_w(remove_right_rim);
+    joint = 0.05;
     difference() {
-        translate([mw, 0, 0])
-            edge_run_neg_x(z1, depth + 2 * mw, false, remove_right_rim);
-        // Main corner: same plane/side as main_after
-        edge_miter_slab(0, z1, -45, flip = true);
-        // Back corner: keep (x+depth)+(z-z1) >= 0
+        // rim_toward_neg_z=true → flange at z1, rim into bay (-Z)
+        translate([joint, 0, 0])
+            edge_run_neg_x(z1, depth + mw + joint, true, remove_right_rim);
         edge_miter_slab(-depth, z1, 45, flip = true);
     }
 }
 
-// Back wall: flange faces +X into bay; miters at both Z ends.
-// Keep side is opposite the mating arm (bodies sit on opposite halves of the plane).
+// Back wall: flange on outer red path at x=-depth (faces -X); rim into bay (+X).
 module edge_ingress_back(z0, z1, depth, remove_right_rim) {
     bay_len = z1 - z0;
     mw = edge_ingress_profile_w(remove_right_rim);
     difference() {
-        translate([-depth, 0, z0 - mw])
-        mirror([1, 0, 0])
-            edge_run_z(0, bay_len + 2 * mw, remove_right_rim);
+        translate([-depth, 0, 0])
+            edge_run_z(z0 - mw, bay_len + 2 * mw, remove_right_rim);
+        // Complementary keep-sides vs arms so faces mate
         edge_miter_slab(-depth, z0, -45, flip = true);
         edge_miter_slab(-depth, z1, 45, flip = false);
     }
@@ -309,15 +299,18 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
     z0 = zc - bay_len / 2;
     z1 = zc + bay_len / 2;
     mw = edge_ingress_profile_w(remove_right_rim);
-    // Main keeps full rim width for glass; need room for that miter too
-    need = max(mw, edge_miter_w);
 
-    assert(z0 >= need && z1 <= length - need,
-        "lid ingress bay needs room for 45° miters within edge length");
+    assert(z0 >= mw && z1 <= length - mw,
+        "lid ingress bay needs room for flange miters within edge length");
 
     union() {
-        edge_ingress_main_before(z0);
-        edge_ingress_main_after(length, z1);
+        // Continuous main edge — solid right rim through the bay (blue corners)
+        difference() {
+            edge_run_z(0, length, false);
+            edge_ingress_bay_opening_cut(z0, bay_len);
+        }
+
+        // U walls — left flange follows outer red path; no inner flange at black marks
         edge_ingress_arm_near(z0, depth, remove_right_rim);
         edge_ingress_arm_far(z1, depth, remove_right_rim);
         edge_ingress_back(z0, z1, depth, remove_right_rim);
