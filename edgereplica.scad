@@ -44,8 +44,8 @@ edge_gripper_body_overlap_z  = 5;
 
 /* [1) Circle cord hole — flange-side boss continuous with rim] */
 edge_cord_hole_enable        = false;
-edge_cord_hole_outer_d       = 12.0;  // outer diameter (constant)
 edge_cord_hole_inner_d       = 6.0;   // bore when enabled
+edge_cord_hole_outer_d       = 6.0;   // constant radial wall thickness (OD = ID + this)
 edge_cord_hole_pos           = "middle"; // "left" 1/3 | "middle" 1/2 | "right" 2/3
 
 /* [2) Cord under — mid gap: keep top, shorten flange+stem] */
@@ -170,10 +170,11 @@ module edge_end_stem_gripper_assembly(z_pos = -2) {
 module edge_cord_hole_feature(length, inner_d, pos) {
     zc = edge_cord_hole_z(length, pos);
     // Axis along Y so the flat faces are continuous with rim top/bottom.
-    translate([0, -edge_top_thickness, zc])
+    // outer_d is constant radial wall thickness; OD = ID + outer_d.
+    translate([-inner_d / 2, -edge_top_thickness, zc])
     rotate([-90, 0, 0])
     difference() {
-        cylinder(d = edge_cord_hole_outer_d, h = edge_top_thickness, $fn = 48);
+        cylinder(d = inner_d + edge_cord_hole_outer_d, h = edge_top_thickness, $fn = 48);
         translate([0, 0, -0.01])
             cylinder(d = inner_d, h = edge_top_thickness + 0.02, $fn = 48);
     }
@@ -209,15 +210,26 @@ module edge_run_z(z0, seg_len, remove_right_rim = false) {
 }
 
 // Perpendicular run along -X (into lid / flange side).
-// Starts slightly in +X so it unions into the main edge body.
-// flange_at_z: Z of the flange face; rim extends away from the bay.
+// Always occupies x <= 0 so arms connect to the main edge flange at x = 0.
+// Flange sits at z_flange (inner corner); rim extends outside the bay so
+// flanges meet at a clean L without overlapping into the spline channel.
 module edge_run_neg_x(z_flange, seg_len, rim_toward_neg_z = true, remove_right_rim = false) {
     joint = 0.05;
-    if (seg_len > 0.01)
-        translate([joint, 0, z_flange])
-        rotate([0, -90, 0])
-        mirror([0, 0, rim_toward_neg_z ? 1 : 0])
-            edge_profile_extrude(seg_len + joint, remove_right_rim);
+    if (seg_len > 0.01) {
+        if (rim_toward_neg_z) {
+            // Near wall: flange at z_flange, rim toward -Z (outside bay).
+            // Ry(90) maps extrude +Z → +X and profile X → -Z; shift so run is -X.
+            translate([-seg_len + joint, 0, z_flange])
+            rotate([0, 90, 0])
+                edge_profile_extrude(seg_len + joint, remove_right_rim);
+        } else {
+            // Far wall: flange at z_flange, rim toward +Z (outside bay).
+            // Ry(-90) maps extrude +Z → -X and profile X → +Z.
+            translate([joint, 0, z_flange])
+            rotate([0, -90, 0])
+                edge_profile_extrude(seg_len + joint, remove_right_rim);
+        }
+    }
 }
 
 module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_center) {
@@ -230,16 +242,21 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
         "lid ingress bay must fit within edge length");
 
     union() {
-        // Main edge before / after the bay (always keeps glass rim)
+        // Main edge before / after the bay — stop at the flange plane of each
+        // side wall so inner flanges meet at an L without overlapping.
         edge_run_z(0, z0 + joint, false);
         edge_run_z(z1 - joint, length - z1 + joint, false);
 
-        // Three flange+stem edges of the ingress U (open toward -X)
+        // Side arms: translate in -X to meet the parallel main-edge flange (x=0).
+        // Flange on the bay-inside corner for continuous spline.
         edge_run_neg_x(z0, depth, rim_toward_neg_z = true, remove_right_rim);
-        translate([-depth + joint, 0, z0 - joint])
-        mirror([1, 0, 0])
-            edge_run_z(0, bay_len + 2 * joint, remove_right_rim);
         edge_run_neg_x(z1, depth, rim_toward_neg_z = false, remove_right_rim);
+
+        // Back wall at bay depth — flange faces into the bay (+X).
+        // Z spans the bay so spline L-corners meet the side-arm flanges.
+        translate([-depth + joint, 0, z0])
+        mirror([1, 0, 0])
+            edge_run_z(0, bay_len, remove_right_rim);
     }
 }
 
