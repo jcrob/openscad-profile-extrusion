@@ -9,7 +9,8 @@
 // Standalone render: open profile_extrusion.scad (calls edgereplica).
 //
 // edgereplica(length, stem_gripper_sides, ...)
-//   stem_gripper_sides = 0|1|2  end gripper assemblies (default 0)
+//   stem_gripper_sides = 0|1|2|3  end gripper assemblies (default 0)
+//     1 = start end, 2 = both ends, 3 = finish end
 //   cord_hole / cord_under / lid_ingress — see parameters below (all default off)
 
 /* [Edge profile dimensions] */
@@ -46,7 +47,9 @@ edge_gripper_body_overlap_z  = 5;
 edge_cord_hole_enable        = false;
 edge_cord_hole_inner_d       = 6.0;   // bore when enabled
 edge_cord_hole_outer_d       = 6.0;   // constant radial wall thickness (OD = ID + this)
-edge_cord_hole_pos           = "middle"; // "left" 1/3 | "middle" 1/2 | "right" 2/3
+// Without ingress: left=L/3, middle=L/2, right=2L/3.
+// With ingress: left/right = mid of each main straight; middle = on back wall at -depth.
+edge_cord_hole_pos           = "middle"; // "left" | "middle" | "right"
 
 /* [2) Cord under — mid gap: keep top, shorten flange+stem] */
 edge_cord_under_enable       = false;
@@ -107,10 +110,23 @@ function edge_stem_half_width_at(depth_below_underside) =
     )
     half_root + t * (half_tip - half_root);
 
-function edge_cord_hole_z(length, pos) =
-    pos == "left"  ? length / 3 :
-    pos == "right" ? 2 * length / 3 :
-                     length / 2;
+// Cord-hole Z along the main edge. When ingress is on, left/right sit at the
+// midpoint of each remaining straight; middle uses bay center (back wall).
+function edge_cord_hole_z(length, pos, do_ingress = false, bay_len = 0, z_center = undef) =
+    let (
+        zc = is_undef(z_center) ? length / 2 : z_center,
+        z0 = zc - bay_len / 2,
+        z1 = zc + bay_len / 2
+    )
+    !do_ingress ? (
+        pos == "left"  ? length / 3 :
+        pos == "right" ? 2 * length / 3 :
+                         length / 2
+    ) : (
+        pos == "left"  ? z0 / 2 :
+        pos == "right" ? (z1 + length) / 2 :
+                         zc
+    );
 
 function edge_select_profile(remove_right_rim) =
     remove_right_rim ? edge_profile_points_no_right_rim : edge_profile_points;
@@ -167,11 +183,17 @@ module edge_end_stem_gripper_assembly(z_pos = -2) {
 // 1) Circle cord hole — flat cylinder continuous with rim on flange side
 // ---------------------------------------------------------------------------
 
-module edge_cord_hole_feature(length, inner_d, pos) {
-    zc = edge_cord_hole_z(length, pos);
-    // Axis along Y so the flat faces are continuous with rim top/bottom.
-    // outer_d is constant radial wall thickness; OD = ID + outer_d.
-    translate([-inner_d / 2, -edge_top_thickness, zc])
+// Boss through the top thickness. On the main edge (left/right, or no ingress)
+// the flange is at x=0. With ingress + middle, the hole sits on the back wall
+// flange at x=-depth.
+module edge_cord_hole_feature(length, inner_d, pos,
+    do_ingress = false, ingress_depth = 0, bay_len = 0, z_center = undef
+) {
+    zc = edge_cord_hole_z(length, pos, do_ingress, bay_len, z_center);
+    // Middle + ingress → offset onto the U back wall by ingress_depth
+    x0 = (do_ingress && pos == "middle") ? -ingress_depth - inner_d / 2 : -inner_d / 2;
+
+    translate([x0, -edge_top_thickness, zc])
     rotate([-90, 0, 0])
     difference() {
         cylinder(d = inner_d + edge_cord_hole_outer_d, h = edge_top_thickness, $fn = 48);
@@ -380,8 +402,9 @@ module edgereplica(
                         ? edge_ingress_remove_right_rim : ingress_remove_right_rim;
     in_z_center    = is_undef(ingress_z_center) ? edge_ingress_z_center : ingress_z_center;
 
-    assert(stem_gripper_sides == 0 || stem_gripper_sides == 1 || stem_gripper_sides == 2,
-        "stem_gripper_sides must be 0, 1, or 2");
+    assert(stem_gripper_sides == 0 || stem_gripper_sides == 1
+            || stem_gripper_sides == 2 || stem_gripper_sides == 3,
+        "stem_gripper_sides must be 0, 1, 2, or 3");
     assert(hole_pos == "left" || hole_pos == "middle" || hole_pos == "right",
         "cord_hole_pos must be \"left\", \"middle\", or \"right\"");
 
@@ -403,16 +426,20 @@ module edgereplica(
 
         // Cord hole boss (unioned onto flange/rim); bore cut when enabled
         if (do_cord_hole)
-            edge_cord_hole_feature(length, hole_inner_d, hole_pos);
+            edge_cord_hole_feature(
+                length, hole_inner_d, hole_pos,
+                do_ingress, in_depth, in_length, in_z_center
+            );
 
         // Optional end stem-gripper assemblies
-        if (stem_gripper_sides >= 1)
+        // 1 = start end only, 2 = both ends, 3 = finish end only
+        if (stem_gripper_sides == 1 || stem_gripper_sides == 2)
             edge_end_stem_gripper_assembly(
                 z_pos = -edge_gripper_len + edge_gripper_body_overlap
                     + edge_gripper_body_overlap_z
             );
 
-        if (stem_gripper_sides >= 2)
+        if (stem_gripper_sides == 2 || stem_gripper_sides == 3)
             edge_end_stem_gripper_assembly(
                 z_pos = length - edge_gripper_body_overlap
                     - edge_gripper_body_overlap_z
