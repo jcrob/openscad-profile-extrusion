@@ -254,18 +254,29 @@ module edge_run_neg_x(z_flange, seg_len, rim_toward_neg_z = true, remove_right_r
     }
 }
 
-// Open the bay through the main edge: keep glass rim (blue), remove flange+stem.
-// Leave a thin flange lip at z0/z1 so side-arm miters volumetrically overlap the main.
-module edge_ingress_bay_opening_cut(z0, z1, depth, bay_len, remove_right_rim) {
-    mw = edge_ingress_profile_w(remove_right_rim);
-    cut_w = min(edge_top_width - edge_ingress_joint,
-                max(edge_stem_root_right, mw) + edge_ingress_joint);
+// Open the bay through the main edge with 45° corners at the ingress lips.
+// A diamond cut at zc forms both mitered corners; a center cube clears the bay span.
+module edge_ingress_bay_opening_cut(z0, z1, depth, bay_len, remove_right_rim, zc) {
+    bay = z1 - z0;
+    // Profile-aligned X offset so the 45° diamond meets the arm miters
+    x_corner = -edge_ingress_joint - bay + edge_top_width / 2 - 2;
+    x_span   = -edge_ingress_joint - bay / 2 + edge_top_width / 2 - 2;
+    z_span   = z0 + edge_top_width
+        + (edge_right_segment_root_t - edge_stem_root_left) - 1.5;
 
-    translate([-edge_ingress_joint, -edge_overall_height - edge_ingress_joint,
-               z0 + edge_ingress_joint])
-        cube([cut_w + edge_ingress_joint,
+    // 45° diamond centered on the bay — cuts both main↔arm corners
+    translate([x_corner, -edge_ingress_joint - edge_overall_height,
+               zc + edge_ingress_joint])
+    rotate([0, 45, 0])
+        cube([bay - 2 * edge_ingress_joint,
               edge_overall_height + 2 * edge_ingress_joint,
-              (z1 - z0) - 2 * edge_ingress_joint]);
+              bay - 2 * edge_ingress_joint]);
+
+    // Clear the straight bay span between the mitered lips
+    translate([x_span, -edge_ingress_joint - edge_overall_height, z_span])
+        cube([bay + 2 * edge_ingress_joint,
+              edge_overall_height * 2 + 2 * edge_ingress_joint,
+              bay - edge_top_width - edge_stem_root_w]);
 }
 
 // Near arm: flange on outer red path at z=z0; rim into bay (+Z). Miters at main + back.
@@ -323,7 +334,7 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
         // Continuous main edge — solid right rim through the bay (blue)
         difference() {
             edge_run_z(0, length, false);
-            edge_ingress_bay_opening_cut(z0, z1, depth, bay_len, remove_right_rim);
+            edge_ingress_bay_opening_cut(z0, z1, depth, bay_len, remove_right_rim, zc);
         }
 
         edge_ingress_arm_near(z0, depth, bay_len, remove_right_rim);
