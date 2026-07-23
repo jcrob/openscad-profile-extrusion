@@ -1,0 +1,26 @@
+services:
+  webapp:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      BAMBU_IP: ${BAMBU_IP:-}
+      BAMBU_ACCESS_CODE: ${BAMBU_ACCESS_CODE:-}
+      BAMBU_SERIAL: ${BAMBU_SERIAL:-}
+      BAMBU_NAME: ${BAMBU_NAME:-Bambu}
+      # Mount host OrcaSlicer if available (recommended for full slice→3MF)
+      ORCA_BIN: ${ORCA_BIN:-/opt/orca/orca-slicer}
+      OPENSCAD_BIN: /usr/local/bin/openscad
+    volumes:
+      - job-data:/data/jobs
+      # Optional: bind-mount OrcaSlicer AppImage extract or binary from host
+      - ${ORCA_HOST_DIR:-./orca-host}:/opt/orca:ro
+    # Prefer host networking on Linux when sending to the printer:
+    # network_mode: host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  job-data:
