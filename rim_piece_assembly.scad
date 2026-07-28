@@ -576,27 +576,31 @@ module corner_sit_on_ridge() {
         cube([ridge_offset_xy, outer_lip_sit_xy, outer_lip_top_grip_height]);
 }
 
-// include_stem_grippers: false when attached via rim_piece_assembly (edge owns end grippers).
+// include_stem_grippers: when false (rim_piece_assembly), omit only the along-Y
+// pair — after the assembly Rx(90) that becomes the rim Z / main-edge channel.
+// Perpendicular (along-X) arm grippers are always kept.
 module corner_solid(include_stem_grippers = true) {
     union() {
         corner_lip_cube();
         corner_inner_rim();
         corner_sit_on_ridge();
 
-        if (include_stem_grippers) {
+        // Along Y in corner frame → along Z on the rim edge after Rx(90)
+        if (include_stem_grippers)
             stem_gripper_pair(
                 center_axis = gripper_along_y_center_x,
                 along_pos   = gripper_y_pos,
                 z_pos       = cornersquare_rim_height,
                 along_y     = true
             );
-            stem_gripper_pair(
-                center_axis = gripper_along_x_center_y,
-                along_pos   = gripper_x_pos,
-                z_pos       = cornersquare_rim_height,
-                along_y     = false
-            );
-        }
+
+        // Perpendicular arm — always present
+        stem_gripper_pair(
+            center_axis = gripper_along_x_center_y,
+            along_pos   = gripper_x_pos,
+            z_pos       = cornersquare_rim_height,
+            along_y     = false
+        );
     }
 }
 
@@ -776,7 +780,7 @@ module rim_piece_assembly(
                     - edge_gripper_body_overlap_z
             );
 
-        // Corners without inside edge stem grippers (edge owns end accessories)
+        // Corners: omit only Z-aligned (main-edge) stem grippers; keep arm grippers
         if (cornerpiecenum == 1 || cornerpiecenum == 2)
             translate([cornersquare_len, 0, -edge_gripper_len])
             rotate([90, 270, 0])
