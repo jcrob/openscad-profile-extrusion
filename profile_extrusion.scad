@@ -1,15 +1,15 @@
-// Standalone render of the edge profile replica.
-// Aquarium lid modular edge — see edgereplica.scad for options.
-include <edgereplica.scad>
+// Standalone render of the rim piece assembly.
+// See rim_piece_assembly.scad for all parameters and modules.
+include <rim_piece_assembly.scad>
 
 /* [Demo selection] */
-demo_mode = "default"; // "default" | "cord_hole" | "cord_under" | "ingress" | "combo"
+demo_mode = "default"; // "default" | "cord_hole" | "cord_under" | "ingress" | "combo" | "corners"
 
 if (demo_mode == "default")
-    edgereplica(length = edge_default_length);
+    rim_piece_assembly(length = edge_default_length);
 
 if (demo_mode == "cord_hole")
-    edgereplica(
+    rim_piece_assembly(
         length = 90,
         cord_hole = true,
         cord_hole_inner_d = 6,
@@ -17,14 +17,14 @@ if (demo_mode == "cord_hole")
     );
 
 if (demo_mode == "cord_under")
-    edgereplica(
+    rim_piece_assembly(
         length = 90,
         cord_under = true,
         cord_under_gap_len = 25
     );
 
 if (demo_mode == "ingress")
-    edgereplica(
+    rim_piece_assembly(
         length = 120,
         lid_ingress = true,
         ingress_depth = 30,
@@ -33,8 +33,8 @@ if (demo_mode == "ingress")
     );
 
 if (demo_mode == "combo")
-    edgereplica(
-        length = 150,
+    rim_piece_assembly(
+        length = 200,
         stem_gripper_sides = 2,
         cord_hole = true,
         cord_hole_inner_d = 5,
@@ -45,4 +45,11 @@ if (demo_mode == "combo")
         ingress_depth = 28,
         ingress_length = 35,
         ingress_remove_right_rim = true
+    );
+
+if (demo_mode == "corners")
+    rim_piece_assembly(
+        length = 150,
+        stem_gripper_sides = 0,
+        cornerpiecenum = 2
     );

@@ -6,7 +6,7 @@ Local LAN webapp: configure edge/corner aquarium-lid parts, generate STLs with O
 
 - **Parts list UI** — add edge replicas (length, stem grippers, cord hole/under, lid ingress) and corner assemblies
 - **BOM summary** — piece counts and plate-fill estimate (rejects oversized jobs when slicing)
-- **OpenSCAD export** — uses `edgereplica.scad` / `cornerpiece.scad` (`show_edge_fit_preview` off for print)
+- **OpenSCAD export** — uses unified `rim_piece_assembly.scad` (edge + corner modules; `show_edge_fit_preview` off for standalone corner print)
 - **OrcaSlicer** — locked machine / process / filament under `print-profiles/`
 - **Bambu LAN** — FTPS upload + MQTT `project_file` (IP + access code + serial)
 - **Fallback** — download `.gcode.3mf` (or STL zip if Orca is not installed)
@@ -115,7 +115,8 @@ server/           FastAPI + OpenSCAD + Orca + Bambu client
 web/              Vite + React UI
 scad/             Symlinks to OpenSCAD sources
 print-profiles/   Locked Bambu/Orca JSON
-edgereplica.scad / cornerpiece.scad
+rim_piece_assembly.scad   unified edge + corner geometry
+edgereplica.scad / cornerpiece.scad / profile_extrusion.scad  thin entrypoints
 ```
 
 ## API

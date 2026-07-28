@@ -24,9 +24,10 @@ COPY server/requirements.txt /app/server/requirements.txt
 RUN pip install --no-cache-dir -r /app/server/requirements.txt
 
 COPY server /app/server
-COPY edgereplica.scad cornerpiece.scad profile_extrusion.scad /app/
+COPY rim_piece_assembly.scad edgereplica.scad cornerpiece.scad profile_extrusion.scad /app/
 # Real files in scad/ (avoid broken symlinks in the image)
 RUN mkdir -p /app/scad \
+    && ln -sf /app/rim_piece_assembly.scad /app/scad/rim_piece_assembly.scad \
     && ln -sf /app/edgereplica.scad /app/scad/edgereplica.scad \
     && ln -sf /app/cornerpiece.scad /app/scad/cornerpiece.scad \
     && ln -sf /app/profile_extrusion.scad /app/scad/profile_extrusion.scad

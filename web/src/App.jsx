@@ -5,6 +5,7 @@ const emptyEdge = () => ({
   qty: 1,
   length: 120,
   stem_gripper_sides: 0,
+  cornerpiecenum: 0,
   cord_hole: false,
   cord_hole_inner_d: 6,
   cord_hole_pos: "middle",
@@ -61,7 +62,7 @@ function EdgeEditor({ part, onChange, onRemove }) {
   return (
     <div className="part-card">
       <div className="head">
-        <span className="kind">Edge replica</span>
+        <span className="kind">Rim piece</span>
         <button type="button" className="btn danger" onClick={onRemove}>
           Remove
         </button>
@@ -89,6 +90,17 @@ function EdgeEditor({ part, onChange, onRemove }) {
           <select
             value={part.stem_gripper_sides}
             onChange={(e) => set("stem_gripper_sides", Number(e.target.value))}
+          >
+            <option value={0}>0 — none</option>
+            <option value={1}>1 — start end</option>
+            <option value={2}>2 — both ends</option>
+            <option value={3}>3 — finish end</option>
+          </select>
+        </Field>
+        <Field label="Corners on edge">
+          <select
+            value={part.cornerpiecenum ?? 0}
+            onChange={(e) => set("cornerpiecenum", Number(e.target.value))}
           >
             <option value={0}>0 — none</option>
             <option value={1}>1 — start end</option>

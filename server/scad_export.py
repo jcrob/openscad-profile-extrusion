@@ -37,11 +37,12 @@ def _scad_str(v: str) -> str:
 
 def write_edge_wrapper(path: Path, edge: EdgePart) -> None:
     path.write_text(
-        f"""// Auto-generated edge part
-include <edgereplica.scad>
-edgereplica(
+        f"""// Auto-generated rim piece
+include <rim_piece_assembly.scad>
+rim_piece_assembly(
     length = {edge.length},
     stem_gripper_sides = {edge.stem_gripper_sides},
+    cornerpiecenum = {edge.cornerpiecenum},
     cord_hole = {_scad_bool(edge.cord_hole)},
     cord_hole_inner_d = {edge.cord_hole_inner_d},
     cord_hole_pos = {_scad_str(edge.cord_hole_pos.value)},

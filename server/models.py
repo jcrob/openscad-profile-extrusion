@@ -18,6 +18,7 @@ class EdgePart(BaseModel):
     qty: int = Field(1, ge=1, le=20)
     length: float = Field(50.0, gt=0, le=500)
     stem_gripper_sides: int = Field(0, ge=0, le=3)
+    cornerpiecenum: int = Field(0, ge=0, le=3)
     cord_hole: bool = False
     cord_hole_inner_d: float = Field(6.0, gt=0, le=40)
     cord_hole_pos: CordHolePos = CordHolePos.middle
@@ -28,17 +29,46 @@ class EdgePart(BaseModel):
     ingress_length: float = Field(40.0, gt=0, le=400)
     ingress_remove_right_rim: bool = False
 
+    @staticmethod
+    def _end_clearance(gripper_sides: int, cornerpiecenum: int, start: bool) -> float:
+        # Match rim_piece_assembly.scad: edge_gripper_len=15, cornersquare_len=15
+        grip_on = (
+            gripper_sides in (1, 2) if start else gripper_sides in (2, 3)
+        )
+        corn_on = (
+            cornerpiecenum in (1, 2) if start else cornerpiecenum in (2, 3)
+        )
+        return (15.0 if grip_on else 0.0) + (15.0 if corn_on else 0.0)
+
     @model_validator(mode="after")
-    def ingress_fits(self):
+    def addon_restrictions(self):
+        clear_s = self._end_clearance(self.stem_gripper_sides, self.cornerpiecenum, True)
+        clear_f = self._end_clearance(self.stem_gripper_sides, self.cornerpiecenum, False)
+        mw = 14.0  # ~edge_top_width / miter room
+
         if self.lid_ingress:
-            # Match OpenSCAD assert: bay needs miter room (~profile width)
-            mw = 14.0
-            if self.ingress_length + 2 * mw > self.length:
+            # OpenSCAD expands ingress_length by 2*edge_top_width (~27.6)
+            bay = self.ingress_length + 2 * 13.8
+            need = bay + clear_s + clear_f + 2 * mw
+            if need > self.length:
                 raise ValueError(
-                    f"ingress_length {self.ingress_length} needs room within length {self.length}"
+                    f"ingress_length {self.ingress_length} (+miters) overlaps end "
+                    f"grippers/corners or exceeds length {self.length}"
                 )
-            if self.cord_under and self.cord_under_gap_len >= self.length:
-                raise ValueError("cord_under_gap_len must be less than length")
+
+        if self.cord_under and self.cord_under_gap_len >= self.length - clear_s - clear_f:
+            raise ValueError("cord_under_gap_len must fit between end accessories")
+
+        if self.cord_hole:
+            # Approximate hole Z (no-ingress positions); reject clear overlap with ends
+            frac = {"left": 1 / 3, "middle": 0.5, "right": 2 / 3}[self.cord_hole_pos.value]
+            if not self.lid_ingress:
+                hz = self.length * frac
+                hr = (self.cord_hole_inner_d + self.cord_hole_inner_d / 3) / 2
+                if hz - hr < clear_s or hz + hr > self.length - clear_f:
+                    raise ValueError(
+                        "cord hole cannot pass corner or end gripper zones"
+                    )
         return self
 
 
