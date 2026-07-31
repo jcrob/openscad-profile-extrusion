@@ -23,6 +23,8 @@ Local LAN webapp: configure edge/corner aquarium-lid parts, generate STLs with O
 
 ## Quick start (dev)
 
+### Linux / macOS
+
 ```bash
 # API deps
 python3 -m venv .venv
@@ -41,6 +43,34 @@ export OPENSCAD_BIN=openscad   # or path to AppImage AppRun
 export ORCA_BIN=orca-slicer    # optional
 python -m uvicorn server.main:app --host 0.0.0.0 --port 8080
 ```
+
+### Windows (PowerShell)
+
+Run **one line at a time** (older PowerShell does not support `&&`):
+
+```powershell
+# From repo root: openscad-profile-extrusion
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r server\requirements.txt
+
+cd web
+npm install
+npm run build
+cd ..
+
+# Optional printer config
+Copy-Item .env.example .env
+# edit BAMBU_IP, BAMBU_ACCESS_CODE, BAMBU_SERIAL in .env
+
+# OpenSCAD must be on PATH, or set full path to openscad.exe
+$env:OPENSCAD_BIN = "openscad"
+# $env:ORCA_BIN = "orca-slicer"   # optional
+
+python -m uvicorn server.main:app --host 0.0.0.0 --port 8080
+```
+
+If `Activate.ps1` is blocked: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
 
 Open **http://localhost:8080/**.
 
