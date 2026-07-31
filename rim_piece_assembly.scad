@@ -12,11 +12,10 @@
 //
 // edge_join_ends             0|1|2|3|4   end join placement (default 0)
 //   0 = none
-//   1 = start end only
-//   2 = both ends (same sex as edge_join_sex)
-//   3 = finish end only
-//   4 = both ends female (forces female; ignores edge_join_sex)
-// edge_join_sex              "male"|"female"  sex for ends 1|2|3 (default "male")
+//   1 = start male, finish female
+//   2 = both ends male
+//   3 = finish male, start female
+//   4 = both ends female
 //   Male and female are mutually exclusive per end (never both on one end).
 //   Male unions protruding bars onto the rim; female differences enlarged
 //   pockets out of the main rim body (no separate socket cube).
@@ -67,7 +66,6 @@ edge_default_length         = 50;
 
 /* [End joins — male peg / female socket (consolidated)] */
 edge_join_ends              = 0;      // 0|1|2|3|4 — see header
-edge_join_sex               = "male"; // "male"|"female" for ends 1|2|3
 edge_gripper_width          = 3.0;
 edge_gripper_height         = depth_below_glass - edge_top_thickness / 2;
 edge_gripper_len            = 15.0;
@@ -169,31 +167,32 @@ function edge_select_profile(remove_right_rim) =
     remove_right_rim ? edge_profile_points_no_right_rim : edge_profile_points;
 
 // Resolve join sex at one end: "none" | "male" | "female"
-function edge_join_start_kind(ends, sex) =
+// ends: 0 none | 1 start♂ finish♀ | 2 both♂ | 3 start♀ finish♂ | 4 both♀
+function edge_join_start_kind(ends) =
     ends == 0 ? "none" :
-    ends == 1 ? sex :
-    ends == 2 ? sex :
-    ends == 3 ? "none" :
+    ends == 1 ? "male" :
+    ends == 2 ? "male" :
+    ends == 3 ? "female" :
     ends == 4 ? "female" : "none";
 
-function edge_join_finish_kind(ends, sex) =
+function edge_join_finish_kind(ends) =
     ends == 0 ? "none" :
-    ends == 1 ? "none" :
-    ends == 2 ? sex :
-    ends == 3 ? sex :
+    ends == 1 ? "female" :
+    ends == 2 ? "male" :
+    ends == 3 ? "male" :
     ends == 4 ? "female" : "none";
 
-function rim_end_clearance_start(join_ends, join_sex, cornerpiecenum) =
+function rim_end_clearance_start(join_ends, cornerpiecenum) =
     let (
-        kind = edge_join_start_kind(join_ends, join_sex),
+        kind = edge_join_start_kind(join_ends),
         grip = kind == "none" ? 0 : edge_gripper_len,
         corn = (cornerpiecenum == 1 || cornerpiecenum == 2) ? cornersquare_len : 0
     )
     grip + corn;
 
-function rim_end_clearance_finish(join_ends, join_sex, cornerpiecenum) =
+function rim_end_clearance_finish(join_ends, cornerpiecenum) =
     let (
-        kind = edge_join_finish_kind(join_ends, join_sex),
+        kind = edge_join_finish_kind(join_ends),
         grip = kind == "none" ? 0 : edge_gripper_len,
         corn = (cornerpiecenum == 2 || cornerpiecenum == 3) ? cornersquare_len : 0
     )
@@ -723,7 +722,6 @@ module rim_piece_assembly(
     length = edge_default_length,
     // End joins (replaces stem_gripper_sides; alias kept below)
     edge_join_ends = undef,
-    edge_join_sex = undef,
     stem_gripper_sides = undef, // deprecated alias → edge_join_ends
     // Cord hole
     cord_hole = undef,
@@ -742,7 +740,6 @@ module rim_piece_assembly(
 ) {
     join_ends = !is_undef(edge_join_ends) ? edge_join_ends
         : (!is_undef(stem_gripper_sides) ? stem_gripper_sides : 0);
-    join_sex  = is_undef(edge_join_sex) ? "male" : edge_join_sex;
 
     do_cord_hole   = is_undef(cord_hole) ? edge_cord_hole_enable : cord_hole;
     hole_inner_d   = is_undef(cord_hole_inner_d) ? edge_cord_hole_inner_d : cord_hole_inner_d;
@@ -759,13 +756,13 @@ module rim_piece_assembly(
                         ? edge_ingress_remove_right_rim : ingress_remove_right_rim;
     in_z_center    = is_undef(ingress_z_center) ? edge_ingress_z_center : ingress_z_center;
 
-    kind_start  = edge_join_start_kind(join_ends, join_sex);
-    kind_finish = edge_join_finish_kind(join_ends, join_sex);
+    kind_start  = edge_join_start_kind(join_ends);
+    kind_finish = edge_join_finish_kind(join_ends);
     corner_start  = (cornerpiecenum == 1 || cornerpiecenum == 2);
     corner_finish = (cornerpiecenum == 2 || cornerpiecenum == 3);
 
-    clear_start  = rim_end_clearance_start(join_ends, join_sex, cornerpiecenum);
-    clear_finish = rim_end_clearance_finish(join_ends, join_sex, cornerpiecenum);
+    clear_start  = rim_end_clearance_start(join_ends, cornerpiecenum);
+    clear_finish = rim_end_clearance_finish(join_ends, cornerpiecenum);
 
     zc_eff = is_undef(in_z_center) ? length / 2 : in_z_center;
     z0_bay = zc_eff - in_length / 2;
@@ -774,8 +771,6 @@ module rim_piece_assembly(
     hole_r = edge_cord_hole_outer_radius(hole_inner_d);
 
     assert(join_ends >= 0 && join_ends <= 4, "edge_join_ends must be 0..4");
-    assert(join_sex == "male" || join_sex == "female",
-        "edge_join_sex must be \"male\" or \"female\"");
     assert(cornerpiecenum == 0 || cornerpiecenum == 1
             || cornerpiecenum == 2 || cornerpiecenum == 3,
         "cornerpiecenum must be 0, 1, 2, or 3");
@@ -892,17 +887,16 @@ module rim_corner_assembly(
     assert(join_b == 0 || join_b == 1 || join_b == 2, "join_b must be 0|1|2");
     assert(length_a > 0 && length_b > 0, "segment lengths must be > 0");
 
-    ends_a = join_a == 0 ? 0 : 1;
-    sex_a  = join_a == 2 ? "female" : "male";
-    ends_b = join_b == 0 ? 0 : 3;
-    sex_b  = join_b == 2 ? "female" : "male";
+    // join_*=0 none, 1 male free end, 2 female free end
+    // Mapped onto edge_join_ends (paired sexes); corner/far end uses the other sex.
+    ends_a = join_a == 0 ? 0 : (join_a == 1 ? 1 : 3); // 1: ♂start ♀finish | 3: ♀start ♂finish
+    ends_b = join_b == 0 ? 0 : (join_b == 1 ? 3 : 1); // prefer finish sex on B's free end
 
     union() {
         // Segment A along +Z — corner only at finish (shared junction)
         rim_piece_assembly(
             length = length_a,
             edge_join_ends = ends_a,
-            edge_join_sex = sex_a,
             cornerpiecenum = 3,
             cord_hole = cord_hole,
             cord_hole_inner_d = cord_hole_inner_d,
@@ -922,7 +916,6 @@ module rim_corner_assembly(
             rim_piece_assembly(
                 length = length_b,
                 edge_join_ends = ends_b,
-                edge_join_sex = sex_b,
                 cornerpiecenum = 0,
                 cord_hole = false,
                 cord_under = false,
@@ -936,7 +929,6 @@ module edgereplica(
     length = edge_default_length,
     stem_gripper_sides = 0,
     edge_join_ends = undef,
-    edge_join_sex = undef,
     cord_hole = undef,
     cord_hole_inner_d = undef,
     cord_hole_pos = undef,
@@ -953,7 +945,6 @@ module edgereplica(
         length = length,
         stem_gripper_sides = stem_gripper_sides,
         edge_join_ends = edge_join_ends,
-        edge_join_sex = edge_join_sex,
         cord_hole = cord_hole,
         cord_hole_inner_d = cord_hole_inner_d,
         cord_hole_pos = cord_hole_pos,

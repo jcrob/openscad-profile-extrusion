@@ -13,18 +13,12 @@ class CordHolePos(str, Enum):
     right = "right"
 
 
-class JoinSex(str, Enum):
-    male = "male"
-    female = "female"
-
-
 class EdgePart(BaseModel):
     kind: Literal["edge"] = "edge"
     qty: int = Field(1, ge=1, le=20)
     length: float = Field(50.0, gt=0, le=500)
-    # 0 none, 1 start, 2 both (sex), 3 finish, 4 both female
+    # 0 none | 1 start♂ finish♀ | 2 both♂ | 3 start♀ finish♂ | 4 both♀
     edge_join_ends: int = Field(0, ge=0, le=4)
-    edge_join_sex: JoinSex = JoinSex.male
     # Deprecated alias — if set and edge_join_ends left default, used as ends
     stem_gripper_sides: int | None = Field(None, ge=0, le=4)
     cornerpiecenum: int = Field(0, ge=0, le=3)
@@ -46,11 +40,8 @@ class EdgePart(BaseModel):
 
     @staticmethod
     def _join_on(ends: int, start: bool) -> bool:
-        if ends == 4:
-            return True
-        if start:
-            return ends in (1, 2)
-        return ends in (2, 3)
+        # Modes 1–4 always place a join on both ends (paired sexes).
+        return ends != 0
 
     @staticmethod
     def _end_clearance(ends: int, cornerpiecenum: int, start: bool) -> float:

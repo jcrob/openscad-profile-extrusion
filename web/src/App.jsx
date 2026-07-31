@@ -5,7 +5,6 @@ const emptyEdge = () => ({
   qty: 1,
   length: 120,
   edge_join_ends: 0,
-  edge_join_sex: "male",
   cornerpiecenum: 0,
   cord_hole: false,
   cord_hole_inner_d: 6,
@@ -93,25 +92,12 @@ function EdgeEditor({ part, onChange, onRemove }) {
             onChange={(e) => set("edge_join_ends", Number(e.target.value))}
           >
             <option value={0}>0 — none</option>
-            <option value={1}>1 — start end</option>
-            <option value={2}>2 — both ends</option>
-            <option value={3}>3 — finish end</option>
+            <option value={1}>1 — start male, finish female</option>
+            <option value={2}>2 — both male</option>
+            <option value={3}>3 — start female, finish male</option>
             <option value={4}>4 — both female</option>
           </select>
         </Field>
-        {(part.edge_join_ends === 1 ||
-          part.edge_join_ends === 2 ||
-          part.edge_join_ends === 3) && (
-          <Field label="Join sex">
-            <select
-              value={part.edge_join_sex ?? "male"}
-              onChange={(e) => set("edge_join_sex", e.target.value)}
-            >
-              <option value="male">male</option>
-              <option value="female">female</option>
-            </select>
-          </Field>
-        )}
         <Field label="Corners on edge">
           <select
             value={part.cornerpiecenum ?? 0}
