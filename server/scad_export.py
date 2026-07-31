@@ -41,7 +41,8 @@ def write_edge_wrapper(path: Path, edge: EdgePart) -> None:
 include <rim_piece_assembly.scad>
 rim_piece_assembly(
     length = {edge.length},
-    stem_gripper_sides = {edge.stem_gripper_sides},
+    edge_join_ends = {edge.edge_join_ends},
+    edge_join_sex = {_scad_str(edge.edge_join_sex.value)},
     cornerpiecenum = {edge.cornerpiecenum},
     cord_hole = {_scad_bool(edge.cord_hole)},
     cord_hole_inner_d = {edge.cord_hole_inner_d},

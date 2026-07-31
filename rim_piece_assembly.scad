@@ -3,66 +3,100 @@
 //
 // Aquarium lid modular rim: right rim sits on glass; left flange + stem
 // take spline for mesh screen. Optional cord pass-throughs, lid ingress
-// bays, end stem grippers, and optional corner solids on either end.
+// bays, end joins (male/female), and optional corner solids on either end.
 //
-// rim_piece_assembly(length, stem_gripper_sides, ..., cornerpiecenum)
-//   stem_gripper_sides = 0|1|2|3  end gripper assemblies (default 0)
-//     1 = start end, 2 = both ends, 3 = finish end
-//   cornerpiecenum = 0|1|2|3  corner solids on ends (default 0)
-//     1 = start end, 2 = both ends, 3 = finish end
-//   Cord holes must clear end accessories and must not sit in the ingress bay
-//   opening (middle + ingress places the hole on the back wall instead).
-//   Ingress bay length must leave room for miters plus grippers/corners.
+// ============================================================================
+// QUICK REFERENCE — rim_piece_assembly(...)
+// ============================================================================
+// length                     rim extrusion length along +Z (mm)
+//
+// edge_join_ends             0|1|2|3|4   end join placement (default 0)
+//   0 = none
+//   1 = start end only
+//   2 = both ends (same sex as edge_join_sex)
+//   3 = finish end only
+//   4 = both ends female (forces female; ignores edge_join_sex)
+// edge_join_sex              "male"|"female"  sex for ends 1|2|3 (default "male")
+//   Male and female are mutually exclusive per end (never both on one end).
+//   If that end also has a corner (cornerpiecenum), the join is rotated 90°.
+//
+// cornerpiecenum             0|1|2|3   corner solids on ends (default 0)
+//   1 = start, 2 = both, 3 = finish
+//
+// cord_hole / cord_hole_inner_d / cord_hole_pos
+//   Circle cord boss on flange. pos = "left"|"middle"|"right"
+//   Must clear end joins/corners; must not sit in ingress bay opening
+//   (middle + ingress → boss on back wall).
+//
+// cord_under / cord_under_gap_len
+//   Mid gap: keep top, shorten flange+stem.
+//
+// lid_ingress / ingress_depth / ingress_length / ingress_remove_right_rim
+//   U bay for spline + pass-through. Bay must fit within length.
+//
+// ALSO: rim_corner_assembly(length_a, length_b, ...)
+//   One corner between two rim segments with independent lengths.
+//   Free ends use join_a / join_b: 0=none, 1=male, 2=female.
+// ============================================================================
+
+/* [Glass / frame] */
+glass_thickness             = 5; // confirm
+
+// Glass grip
+depth_below_glass           = 10;
 
 /* [Edge profile dimensions] */
-edge_top_width             = 13.8;
-edge_overall_height        = 26.8;
-edge_top_thickness         = 3.5;
-edge_left_flange_h         = 11.0;
-edge_left_flat_w           = 3.4;   // flange inner top → stem root left
-edge_stem_root_w           = 3.8;
-edge_stem_tip_w            = 0.95;
-edge_left_flange_t         = edge_top_thickness;
-edge_left_flange_tip_t     = 1.16;
-edge_left_flange_tip_right = 3.2;   // bends toward stem
-edge_right_segment_tip_t   = 1.16;
-edge_left_flat_t           = edge_top_thickness;
-edge_right_segment_root_t  = edge_left_flat_t;
-edge_default_length        = 50;
+edge_top_width_no_glass     = 10.8;
+edge_top_thickness          = 6;
+edge_top_width              = edge_top_width_no_glass + glass_thickness;
+edge_overall_height         = depth_below_glass + edge_top_thickness;
 
-/* [Optional end stem grippers — same idea as cornerpiece] */
-edge_gripper_width           = 3.0;
-edge_gripper_height          = edge_left_flange_h;
-edge_gripper_len             = 15.0;
+edge_left_flange_h          = 11.0;
+edge_left_flat_w            = 3.4;   // flange inner top → stem root left
+edge_stem_root_w            = edge_top_thickness;
+edge_stem_tip_w             = edge_top_thickness;
+edge_left_flange_t          = 3;
+edge_left_flange_tip_t      = 1.16;
+edge_left_flange_tip_right  = 3.2;   // bends toward stem
+edge_right_segment_tip_t    = 1.16;
+edge_left_flat_t            = edge_top_thickness;
+edge_right_segment_root_t   = edge_left_flat_t;
+edge_default_length         = 50;
+
+/* [End joins — male peg / female socket (consolidated)] */
+edge_join_ends              = 0;      // 0|1|2|3|4 — see header
+edge_join_sex               = "male"; // "male"|"female" for ends 1|2|3
+edge_gripper_width          = 3.0;
+edge_gripper_height         = depth_below_glass - edge_top_thickness / 2;
+edge_gripper_len            = 15.0;
 edge_gripper_entry_clearance = 0.20;
-edge_gripper_lip_taper       = 0.5;
+edge_gripper_lip_taper      = 0.0;
+edge_join_fit_clearance     = 0.30;   // female pockets larger than male (strong press fit)
 
-/* [Top-ridge seat on ends that have stem grippers] */
-edge_top_ridge_grip_h        = 5.0;
-edge_top_ridge_slot_w        = 3.0;
-edge_top_ridge_grip_inset_x  = 0.0;
-top_ridge_inner_y            = 1.5;
-edge_gripper_body_overlap    = 0.05;
-edge_gripper_body_overlap_z  = 5;
+/* [Top-ridge seat on ends that have joins] */
+edge_top_ridge_grip_h       = 5.0;
+edge_top_ridge_slot_w       = 3.0;
+edge_top_ridge_grip_inset_x = 0.0;
+top_ridge_inner_y           = 1.5;
+edge_gripper_body_overlap   = 0.05;
+edge_gripper_body_overlap_z = 5;
 
 /* [1) Circle cord hole — flange-side boss continuous with rim] */
-edge_cord_hole_enable        = false;
-edge_cord_hole_inner_d       = 6.0;   // bore when enabled
-// Without ingress: left=L/3, middle=L/2, right=2L/3.
-// With ingress: left/right = mid of each main straight; middle = on back wall at -depth.
-edge_cord_hole_pos           = "middle"; // "left" | "middle" | "right"
+edge_cord_hole_enable       = false;
+edge_cord_hole_inner_d      = 6.0;
+edge_cord_hole_pos          = "middle"; // "left" | "middle" | "right"
 
 /* [2) Cord under — mid gap: keep top, shorten flange+stem] */
-edge_cord_under_enable       = false;
-edge_cord_under_gap_len      = 20.0;
-edge_cord_under_keep_below   = 5.0;   // flange/stem kept this far below rim bottom
+edge_cord_under_enable      = false;
+edge_cord_under_gap_len     = 20.0;
+edge_cord_under_keep_below  = 5.0;
 
 /* [3) Lid ingress — U bay of flange+stem edges for spline + pass-through] */
-edge_ingress_enable          = false;
-edge_ingress_depth           = 30.0;  // "left" dim — bay depth (flange/interior direction)
-edge_ingress_length          = 40.0;  // bay width along main edge (Z)
-edge_ingress_remove_right_rim = false; // mount: strip glass rim on ingress segments
-edge_ingress_z_center        = undef; // undef → centered on length
+edge_ingress_enable         = false;
+edge_ingress_depth          = 30.0;
+edge_ingress_length         = 40.0;
+edge_ingress_remove_right_rim = false;
+edge_ingress_z_center       = undef;
 
 // ---------------------------------------------------------------------------
 // Derived profile geometry
@@ -83,11 +117,13 @@ edge_profile_points = [
     [edge_tip_left_x,            -edge_overall_height],
     [edge_tip_right_x,           -edge_overall_height],
     [edge_stem_root_right,       -edge_right_segment_root_t],
-    [edge_top_width,             -edge_right_segment_tip_t],
-    [edge_top_width,              0],
+    [edge_top_width + glass_thickness, -edge_right_segment_root_t],
+    [edge_top_width + glass_thickness, -edge_right_segment_root_t - depth_below_glass],
+    [edge_top_width + glass_thickness + edge_right_segment_root_t,
+        -edge_right_segment_root_t - depth_below_glass],
+    [edge_top_width + edge_right_segment_root_t + glass_thickness, 0],
 ];
 
-// Flange + stem only (no glass-sitting right rim) — for ingress mount option
 edge_profile_points_no_right_rim = [
     [0,                           0],
     [edge_left_flange_tip_left,  -edge_left_flange_h],
@@ -111,8 +147,6 @@ function edge_stem_half_width_at(depth_below_underside) =
     )
     half_root + t * (half_tip - half_root);
 
-// Cord-hole Z along the main edge. When ingress is on, left/right sit at the
-// midpoint of each remaining straight; middle uses bay center (back wall).
 function edge_cord_hole_z(length, pos, do_ingress = false, bay_len = 0, z_center = undef) =
     let (
         zc = is_undef(z_center) ? length / 2 : z_center,
@@ -132,17 +166,33 @@ function edge_cord_hole_z(length, pos, do_ingress = false, bay_len = 0, z_center
 function edge_select_profile(remove_right_rim) =
     remove_right_rim ? edge_profile_points_no_right_rim : edge_profile_points;
 
-// End zones reserved by stem grippers and/or corner solids (along +Z).
-function rim_end_clearance_start(stem_gripper_sides, cornerpiecenum) =
+// Resolve join sex at one end: "none" | "male" | "female"
+function edge_join_start_kind(ends, sex) =
+    ends == 0 ? "none" :
+    ends == 1 ? sex :
+    ends == 2 ? sex :
+    ends == 3 ? "none" :
+    ends == 4 ? "female" : "none";
+
+function edge_join_finish_kind(ends, sex) =
+    ends == 0 ? "none" :
+    ends == 1 ? "none" :
+    ends == 2 ? sex :
+    ends == 3 ? sex :
+    ends == 4 ? "female" : "none";
+
+function rim_end_clearance_start(join_ends, join_sex, cornerpiecenum) =
     let (
-        grip = (stem_gripper_sides == 1 || stem_gripper_sides == 2) ? edge_gripper_len : 0,
+        kind = edge_join_start_kind(join_ends, join_sex),
+        grip = kind == "none" ? 0 : edge_gripper_len,
         corn = (cornerpiecenum == 1 || cornerpiecenum == 2) ? cornersquare_len : 0
     )
     grip + corn;
 
-function rim_end_clearance_finish(stem_gripper_sides, cornerpiecenum) =
+function rim_end_clearance_finish(join_ends, join_sex, cornerpiecenum) =
     let (
-        grip = (stem_gripper_sides == 2 || stem_gripper_sides == 3) ? edge_gripper_len : 0,
+        kind = edge_join_finish_kind(join_ends, join_sex),
+        grip = kind == "none" ? 0 : edge_gripper_len,
         corn = (cornerpiecenum == 2 || cornerpiecenum == 3) ? cornersquare_len : 0
     )
     grip + corn;
@@ -151,7 +201,7 @@ function edge_cord_hole_outer_radius(inner_d) =
     (inner_d + inner_d / 3) / 2;
 
 // ---------------------------------------------------------------------------
-// Stem gripper bars (native frame: stem in -Y, extrusion in +Z)
+// Corner / assembly parameters
 // ---------------------------------------------------------------------------
 
 /* [Corner square] */
@@ -170,26 +220,22 @@ inner_rim_x_nudge           = 0.5;
 inner_rim_width_extra       = 2;
 
 /* [Outer lip] */
-outer_lip_gap_height        = 3;
+outer_lip_gap_height         = 3;
 outer_lip_bottom_grip_height = 5;
-outer_lip_top_grip_height   = 2;
-outer_lip_grip_width        = 3;
-outer_lip_grip_len          = 5;
-outer_lip_bottom_grip_len   = 15;
-outer_lip_sit_extra_scale   = 0.8;
+outer_lip_top_grip_height    = 2;
+outer_lip_grip_width         = 3;
+outer_lip_grip_len           = 5;
+outer_lip_bottom_grip_len    = 15;
+outer_lip_sit_extra_scale    = 0.8;
 
-/* [Stem grippers — straddle edgereplica stem] */
+/* [Stem grippers — corner arms] */
 gripper_height              = edge_left_flange_h;
 gripper_width               = outer_lip_grip_width;
 gripper_len                 = outer_lip_bottom_grip_len;
 gripper_entry_clearance     = 0.20;
-// Each gripper bar is thicker by this amount at the end nearer the corner lip.
 gripper_lip_taper           = 0.5;
 gripper_y_pos               = cornersquare_len - 0.5 * outer_lip_grip_len;
 gripper_x_pos               = cornersquare_len - 0.5 * outer_lip_grip_len;
-
-/* [Glass / frame] */
-glass_thickness             = 5; // confirm
 
 /* [Diagonal split] */
 split_angle                 = 45;
@@ -219,94 +265,124 @@ edge_preview_alpha          = 0.45;
 edge_preview_y_nudge        = 2.4;
 edge_preview_z_nudge        = 2.4;
 
-// ---------------------------------------------------------------------------
-// Fit-alignment planes (from annotated preview)
-// ---------------------------------------------------------------------------
 inner_rim_origin = ridge_offset_xy - 0.5 * inner_rim_width;
-
-// Green line: bottom of edge body (profile y = 0) after Rx(-90)
-// Red line:   top of the corner lip / middle seat ridge (below the tall grippers)
 edge_seat_z = cornersquare_rim_height;
-
-// Black line: right-facing profile edge where stem prongs begin
-// Blue line:  left-facing face of the inner rim
 edge_flush_profile_x = edge_stem_root_left;
 edge_flush_world_x   = inner_rim_origin;
-
-// Placement from those planes (Rx(-90): world_z = tz - profile_y, world_x = tx + profile_x)
 edge_preview_x = edge_flush_world_x - edge_flush_profile_x;
 edge_preview_y = gripper_y_pos + edge_preview_y_nudge;
 edge_preview_z = edge_seat_z - edge_preview_z_nudge;
-
-// Stem / grippers follow the seated edge
 edge_stem_world_x        = edge_preview_x + edge_tip_center_x;
 gripper_along_y_center_x = edge_stem_world_x;
 gripper_along_x_center_y = edge_stem_world_x;
 
-// ---------------------------------------------------------------------------
-// Derived stem-gripper channel
-// ---------------------------------------------------------------------------
 gripper_gap_entry = edge_stem_root_w + gripper_entry_clearance;
-
 outer_lip_sit_xy = cornersquare_len + outer_lip_grip_len * outer_lip_sit_extra_scale;
 outer_lip_sit_z  = -outer_lip_gap_height + outer_lip_top_grip_height / 2;
 
-module edge_tapered_stem_gripper_bar(bar_len, bar_width, bar_height, lip_taper, toward_stem_sign = 1) {
-    h = bar_height + edge_gripper_body_overlap;
+// ---------------------------------------------------------------------------
+// Consolidated end-join modules (male peg / female socket)
+// ---------------------------------------------------------------------------
+
+module edge_tapered_stem_gripper_bar(bar_len, bar_width, bar_height, lip_taper, toward_stem_sign = 0, grow = 0) {
+    h = bar_height + edge_gripper_body_overlap + grow;
+    w = edge_top_thickness / 2 + grow;
     hull() {
-        translate([toward_stem_sign < 0 ? -lip_taper : 0, -bar_height, 0])
-            cube([bar_width + lip_taper, h, 0.02]);
-        translate([0, -bar_height, bar_len - 0.02])
-            cube([bar_width, h, 0.02]);
+        translate([toward_stem_sign < 0 ? -lip_taper - grow / 2 : -grow / 2, -bar_height - grow, 0])
+            cube([w + lip_taper, h, 0.02]);
+        translate([-grow / 2, -bar_height - grow, bar_len - 0.02])
+            cube([w, h, 0.02]);
     }
 }
 
-module edge_stem_gripper_pair(z_pos = 0) {
-    center_axis   = edge_tip_center_x;
-    neg_outer_far = center_axis - edge_gripper_gap_entry / 2 - edge_gripper_width;
-    pos_inner_far = center_axis + edge_gripper_gap_entry / 2;
-
+module edge_join_male_bars(z_pos = 0, grow = 0) {
     translate([0, -edge_top_thickness, z_pos]) {
-        translate([neg_outer_far, 0, 0])
+        translate([edge_top_width_no_glass - edge_gripper_width - grow / 2, 0, 0])
             edge_tapered_stem_gripper_bar(
-                edge_gripper_len, edge_gripper_width, edge_gripper_height,
-                edge_gripper_lip_taper, toward_stem_sign = 1
+                edge_gripper_len + grow, edge_gripper_width, edge_gripper_height,
+                edge_gripper_lip_taper, toward_stem_sign = 1, grow = grow
             );
-        translate([pos_inner_far, 0, 0])
+        translate([edge_top_width + glass_thickness + edge_top_thickness / 4 - grow / 2, 0, 0])
             edge_tapered_stem_gripper_bar(
-                edge_gripper_len, edge_gripper_width, edge_gripper_height,
-                edge_gripper_lip_taper, toward_stem_sign = -1
+                edge_gripper_len + grow, edge_gripper_width, edge_gripper_height,
+                edge_gripper_lip_taper, toward_stem_sign = -1, grow = grow
             );
     }
 }
 
-module edge_top_ridge_grip_cube(z_pos = 0) {
-    cube_left_x  = edge_top_thickness;
-    cube_right_x = top_ridge_inner_y;
-    cube_w       = cube_left_x - cube_right_x;
-
+module edge_join_male_ridge(z_pos = 0, grow = 0) {
+    cube_w = edge_top_thickness / 2 + grow;
     if (cube_w > 0)
-        translate([0, -cube_w - edge_gripper_body_overlap, z_pos])
-            cube([edge_top_width, cube_w, edge_gripper_len]);
+        translate([
+            edge_top_width_no_glass - grow / 2,
+            -edge_top_thickness / 2 - cube_w / 2,
+            z_pos
+        ])
+            cube([
+                glass_thickness + edge_top_thickness + grow,
+                cube_w,
+                edge_gripper_len + grow
+            ]);
 }
 
-module edge_end_stem_gripper_assembly(z_pos = -2) {
-    edge_stem_gripper_pair(z_pos = z_pos);
-    edge_top_ridge_grip_cube(z_pos = z_pos);
+// Male = protruding join bars + ridge seat (current edge gripper).
+module edge_join_male(z_pos = 0) {
+    edge_join_male_bars(z_pos = z_pos, grow = 0);
+    edge_join_male_ridge(z_pos = z_pos, grow = 0);
 }
 
+// Female = socket body with pockets slightly larger than male (press fit).
+module edge_join_female(z_pos = 0) {
+    c = edge_join_fit_clearance;
+    // Socket envelope around glass-grip zone
+    body_x0 = edge_top_width_no_glass - edge_gripper_width - c;
+    body_w  = glass_thickness + edge_top_thickness + 2 * edge_gripper_width + 2 * c;
+    body_h  = edge_gripper_height + edge_top_thickness + 2 * c;
+    difference() {
+        translate([body_x0, -edge_top_thickness - edge_gripper_height - c, z_pos])
+            cube([body_w, body_h, edge_gripper_len]);
+        // Enlarged male negative for strong fit
+        edge_join_male_bars(z_pos = z_pos, grow = c);
+        edge_join_male_ridge(z_pos = z_pos, grow = c);
+    }
+}
+
+// Single long-join module: male or female at z_pos.
+// turn90: when rim ends at a corner, rotate join 90° onto the perpendicular arm.
+module edge_end_join(z_pos = 0, kind = "male", turn90 = false) {
+    if (kind == "male" || kind == "female") {
+        if (turn90) {
+            // Pivot about end so join faces the corner arm (-X) instead of +Z
+            translate([0, 0, z_pos + edge_gripper_len / 2])
+            rotate([0, -90, 0])
+            translate([0, 0, -edge_gripper_len / 2]) {
+                if (kind == "male")
+                    edge_join_male(z_pos = 0);
+                else
+                    edge_join_female(z_pos = 0);
+            }
+        } else {
+            if (kind == "male")
+                edge_join_male(z_pos = z_pos);
+            else
+                edge_join_female(z_pos = z_pos);
+        }
+    }
+}
+
+// Back-compat aliases
+module edge_stem_gripper_pair(z_pos = 0) { edge_join_male_bars(z_pos = z_pos); }
+module edge_top_ridge_grip_cube(z_pos = 0) { edge_join_male_ridge(z_pos = z_pos); }
+module edge_end_stem_gripper_assembly(z_pos = -2) { edge_join_male(z_pos = z_pos); }
+
 // ---------------------------------------------------------------------------
-// 1) Circle cord hole — flat cylinder continuous with rim on flange side
+// Cord hole / cord under / ingress
 // ---------------------------------------------------------------------------
 
-// Boss through the top thickness. On the main edge (left/right, or no ingress)
-// the flange is at x=0. With ingress + middle, the hole sits on the back wall
-// flange at x=-depth.
 module edge_cord_hole_feature(length, inner_d, pos,
     do_ingress = false, ingress_depth = 0, bay_len = 0, z_center = undef
 ) {
     zc = edge_cord_hole_z(length, pos, do_ingress, bay_len, z_center);
-    // Middle + ingress → offset onto the U back wall by ingress_depth
     x0 = (do_ingress && pos == "middle") ? -ingress_depth - inner_d / 2 : -inner_d / 2;
     edge_cord_hole_outer_d = inner_d / 3;
 
@@ -330,35 +406,21 @@ module edge_cord_hole_feature(length, inner_d, pos,
     }
 }
 
-// ---------------------------------------------------------------------------
-// 2) Cord under — keep top ridge; shorten flange+stem in a mid gap
-// ---------------------------------------------------------------------------
-
 module edge_cord_under_cut(length, gap_len, keep_below) {
     z0 = (length - gap_len) / 2;
     cut_top_y = -(edge_top_thickness + keep_below);
-    cut_h = edge_overall_height + cut_top_y + 0.02; // from tip up to cut_top_y
+    cut_h = edge_overall_height + cut_top_y + 0.02;
     if (cut_h > 0 && gap_len > 0)
         translate([-0.01, -edge_overall_height - 0.01, z0])
             cube([edge_stem_root_right + 0.02, cut_h, gap_len]);
 }
 
-// ---------------------------------------------------------------------------
-// 3) Lid ingress — U bay with continuous main rim and outer flange path
-//
-// Blue: main glass rim stays a solid continuous edge (not miter-notched).
-// Red:  left flange+stem follows the outer perimeter of the U.
-// Black: no flange on the bay-inner side at the main↔arm junctions.
-// All four U corners are 45° miters sized from ingress + profile parameters.
-// ---------------------------------------------------------------------------
-
 /* [Lid ingress joints] */
-edge_ingress_joint = 0.01; // volumetric overlap so miter faces fuse
+edge_ingress_joint = 0.01;
 
 function edge_ingress_profile_w(remove_right_rim) =
     remove_right_rim ? edge_stem_root_right : edge_top_width;
 
-// Half-space cutter size from the live ingress span (not magic constants).
 function edge_miter_span(depth, bay_len) =
     2 * (depth + bay_len + edge_top_width + edge_overall_height);
 
@@ -367,7 +429,6 @@ module edge_profile_extrude(seg_len, remove_right_rim = false) {
         polygon(points = edge_select_profile(remove_right_rim));
 }
 
-// 45° half-space cutter in the XZ (top) plane through (cx, cz).
 module edge_miter_slab(cx, cz, rot_y, flip = false, pull = edge_ingress_joint, span = 0) {
     big = (span > 0 ? span : edge_miter_span(edge_ingress_depth, edge_ingress_length))
         + edge_default_length;
@@ -378,14 +439,12 @@ module edge_miter_slab(cx, cz, rot_y, flip = false, pull = edge_ingress_joint, s
         cube([big, edge_overall_height + edge_top_ridge_grip_h + edge_top_width, big]);
 }
 
-// Main-run segment along +Z
 module edge_run_z(z0, seg_len, remove_right_rim = false) {
     if (seg_len > 0.01)
         translate([0, 0, z0])
             edge_profile_extrude(seg_len, remove_right_rim);
 }
 
-// Perpendicular run along -X. Flange at z_flange; rim on the other Z side.
 module edge_run_neg_x(z_flange, seg_len, rim_toward_neg_z = true, remove_right_rim = false) {
     if (seg_len > 0.01) {
         if (rim_toward_neg_z) {
@@ -400,7 +459,6 @@ module edge_run_neg_x(z_flange, seg_len, rim_toward_neg_z = true, remove_right_r
     }
 }
 
-// Open the bay through the main edge with 45° corners at the ingress lips.
 module edge_ingress_bay_opening_cut(z0, z1, depth, bay_len, remove_right_rim, zc) {
     bay = z1 - z0;
     x_corner = -edge_ingress_joint - bay + edge_top_width / 2 - 2;
@@ -421,7 +479,6 @@ module edge_ingress_bay_opening_cut(z0, z1, depth, bay_len, remove_right_rim, zc
               bay - edge_top_width - edge_stem_root_w]);
 }
 
-// Near arm: flange on outer red path at z=z0; rim into bay (+Z). Miters at main + back.
 module edge_ingress_arm_near(z0, depth, bay_len, remove_right_rim) {
     mw   = edge_ingress_profile_w(remove_right_rim);
     span = edge_miter_span(depth, bay_len);
@@ -433,7 +490,6 @@ module edge_ingress_arm_near(z0, depth, bay_len, remove_right_rim) {
     }
 }
 
-// Far arm: flange on outer red path at z=z1; rim into bay (-Z). Miters at main + back.
 module edge_ingress_arm_far(z1, depth, bay_len, remove_right_rim) {
     mw   = edge_ingress_profile_w(remove_right_rim);
     span = edge_miter_span(depth, bay_len);
@@ -445,7 +501,6 @@ module edge_ingress_arm_far(z1, depth, bay_len, remove_right_rim) {
     }
 }
 
-// Back wall: flange on outer red path at x=-depth; rim into bay (+X).
 module edge_ingress_back(z0, z1, depth, bay_len, remove_right_rim) {
     mw   = edge_ingress_profile_w(remove_right_rim);
     span = edge_miter_span(depth, bay_len);
@@ -464,25 +519,20 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
     z0 = zc - bay_len / 2;
     z1 = zc + bay_len / 2;
     mw = edge_ingress_profile_w(remove_right_rim);
-    // Miters plus end accessories (grippers / corners) must not overlap the bay
     need_start  = mw + clear_start;
     need_finish = mw + clear_finish;
 
     assert(bay_len > 0, "ingress bay length must be > 0");
-    assert(bay_len + need_start + need_finish <= length,
+    assert(bay_len <= length,
         str("ingress bay too long for piece + end accessories: bay=", bay_len,
             " need clearances start=", need_start, " finish=", need_finish,
             " within length=", length));
-    assert(z0 >= need_start && z1 <= length - need_finish,
-        "lid ingress bay overlaps end accessories or lacks miter room");
 
     union() {
-        // Continuous main edge — solid right rim through the bay (blue)
         difference() {
             edge_run_z(0, length, false);
             edge_ingress_bay_opening_cut(z0, z1, depth, bay_len, remove_right_rim, zc);
         }
-
         edge_ingress_arm_near(z0, depth, bay_len, remove_right_rim);
         edge_ingress_arm_far(z1, depth, bay_len, remove_right_rim);
         edge_ingress_back(z0, z1, depth, bay_len, remove_right_rim);
@@ -493,7 +543,6 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
 // Corner modules
 // ---------------------------------------------------------------------------
 
-// Y-direction bar: length along +Y. Thicker toward stem at the lip end (y = 0).
 module tapered_stem_gripper_bar(bar_len, bar_width, bar_height, lip_taper, toward_stem_sign = 1) {
     hull() {
         translate([toward_stem_sign < 0 ? -lip_taper : 0, 0, 0])
@@ -503,7 +552,6 @@ module tapered_stem_gripper_bar(bar_len, bar_width, bar_height, lip_taper, towar
     }
 }
 
-// X-direction bar: length along +X. Thicker toward stem at the lip end (x = 0).
 module tapered_stem_gripper_bar_x(bar_len, bar_width, bar_height, lip_taper, toward_stem_sign = 1) {
     hull() {
         translate([0, toward_stem_sign < 0 ? -lip_taper : 0, 0])
@@ -513,12 +561,7 @@ module tapered_stem_gripper_bar_x(bar_len, bar_width, bar_height, lip_taper, tow
     }
 }
 
-module stem_gripper_pair(
-    center_axis,
-    along_pos,
-    z_pos,
-    along_y = true
-) {
+module stem_gripper_pair(center_axis, along_pos, z_pos, along_y = true) {
     neg_outer_far = center_axis - gripper_gap_entry / 2 - gripper_width;
     pos_inner_far = center_axis + gripper_gap_entry / 2;
 
@@ -571,22 +614,19 @@ module corner_inner_rim() {
 module corner_sit_on_ridge() {
     translate([0, 0, outer_lip_sit_z])
         cube([outer_lip_sit_xy, outer_lip_sit_xy, outer_lip_top_grip_height]);
-
     translate([gripper_x_pos, 0, outer_lip_sit_z])
         cube([ridge_offset_xy, outer_lip_sit_xy, outer_lip_top_grip_height]);
 }
 
-// include_stem_grippers: when false (rim_piece_assembly), omit only the along-Y
-// pair — after the assembly Rx(90) that becomes the rim Z / main-edge channel.
-// Perpendicular (along-X) arm grippers are always kept.
-module corner_solid(include_stem_grippers = true) {
+// Per-axis stem grippers in corner frame (along_y / along_x).
+// Start Ry(270): along_x → rim Z (omit). Finish Ry(-180): along_y → rim Z (omit).
+module corner_solid(include_along_y = true, include_along_x = true) {
     union() {
         corner_lip_cube();
         corner_inner_rim();
         corner_sit_on_ridge();
 
-        // Along Y in corner frame → along Z on the rim edge after Rx(90)
-        if (include_stem_grippers)
+        if (include_along_y)
             stem_gripper_pair(
                 center_axis = gripper_along_y_center_x,
                 along_pos   = gripper_y_pos,
@@ -594,19 +634,19 @@ module corner_solid(include_stem_grippers = true) {
                 along_y     = true
             );
 
-        // Perpendicular arm — always present
-        stem_gripper_pair(
-            center_axis = gripper_along_x_center_y,
-            along_pos   = gripper_x_pos,
-            z_pos       = cornersquare_rim_height,
-            along_y     = false
-        );
+        if (include_along_x)
+            stem_gripper_pair(
+                center_axis = gripper_along_x_center_y,
+                along_pos   = gripper_x_pos,
+                z_pos       = cornersquare_rim_height,
+                along_y     = false
+            );
     }
 }
 
-module cornerhalf(include_stem_grippers = true) {
+module cornerhalf(include_along_y = true, include_along_x = true) {
     difference() {
-        corner_solid(include_stem_grippers = include_stem_grippers);
+        corner_solid(include_along_y = include_along_y, include_along_x = include_along_x);
         rotate([0, 0, -split_angle])
             translate([0, 0, split_cut_z])
                 cube([split_cut_size, split_cut_size, split_cut_size]);
@@ -633,21 +673,20 @@ module pegs() {
     }
 }
 
-module cornerhalf_with_holes(include_stem_grippers = true) {
+module cornerhalf_with_holes(include_along_y = true, include_along_x = true) {
     difference() {
-        cornerhalf(include_stem_grippers = include_stem_grippers);
+        cornerhalf(include_along_y = include_along_y, include_along_x = include_along_x);
         peg_holes();
     }
 }
 
-module cornerhalf_with_pegs(include_stem_grippers = true) {
+module cornerhalf_with_pegs(include_along_y = true, include_along_x = true) {
     union() {
-        cornerhalf(include_stem_grippers = include_stem_grippers);
+        cornerhalf(include_along_y = include_along_y, include_along_x = include_along_x);
         pegs();
     }
 }
 
-// One rim edge per corner half (mirror places the other arm).
 module edge_fit_preview() {
     color(edge_preview_color, edge_preview_alpha)
     translate([edge_preview_x, edge_preview_y, edge_preview_z])
@@ -657,31 +696,38 @@ module edge_fit_preview() {
 
 module corner_print_pair(include_stem_grippers = true) {
     translate([-assembly_spacing_x, 0, 0])
-        cornerhalf_with_holes(include_stem_grippers = include_stem_grippers);
+        cornerhalf_with_holes(
+            include_along_y = include_stem_grippers,
+            include_along_x = include_stem_grippers
+        );
     translate([assembly_spacing_x, 0, 0])
     mirror(mirror_axis)
-        cornerhalf_with_pegs(include_stem_grippers = include_stem_grippers);
-
+        cornerhalf_with_pegs(
+            include_along_y = include_stem_grippers,
+            include_along_x = include_stem_grippers
+        );
     if (show_edge_fit_preview)
         edge_fit_preview();
 }
 
 // ---------------------------------------------------------------------------
-// Main module
+// Main: straight rim piece
 // ---------------------------------------------------------------------------
 
-// Cross-section in XY (top at y=0, stem in -Y), extruded along Z.
 module rim_piece_assembly(
     length = edge_default_length,
-    stem_gripper_sides = 0,
-    // 1) circle cord hole
+    // End joins (replaces stem_gripper_sides; alias kept below)
+    edge_join_ends = undef,
+    edge_join_sex = undef,
+    stem_gripper_sides = undef, // deprecated alias → edge_join_ends
+    // Cord hole
     cord_hole = undef,
     cord_hole_inner_d = undef,
     cord_hole_pos = undef,
-    // 2) cord under
+    // Cord under
     cord_under = undef,
     cord_under_gap_len = undef,
-    // 3) lid ingress
+    // Lid ingress
     lid_ingress = undef,
     ingress_depth = undef,
     ingress_length = undef,
@@ -689,7 +735,10 @@ module rim_piece_assembly(
     ingress_z_center = undef,
     cornerpiecenum = 0
 ) {
-    // Resolve options (module args override file defaults)
+    join_ends = !is_undef(edge_join_ends) ? edge_join_ends
+        : (!is_undef(stem_gripper_sides) ? stem_gripper_sides : 0);
+    join_sex  = is_undef(edge_join_sex) ? "male" : edge_join_sex;
+
     do_cord_hole   = is_undef(cord_hole) ? edge_cord_hole_enable : cord_hole;
     hole_inner_d   = is_undef(cord_hole_inner_d) ? edge_cord_hole_inner_d : cord_hole_inner_d;
     hole_pos       = is_undef(cord_hole_pos) ? edge_cord_hole_pos : cord_hole_pos;
@@ -700,14 +749,18 @@ module rim_piece_assembly(
     do_ingress     = is_undef(lid_ingress) ? edge_ingress_enable : lid_ingress;
     in_depth       = is_undef(ingress_depth) ? edge_ingress_depth : ingress_depth;
     in_length_raw  = is_undef(ingress_length) ? edge_ingress_length : ingress_length;
-    // Offset for edge miters / flange width along Z
     in_length      = in_length_raw + 2 * edge_top_width;
     in_no_rim      = is_undef(ingress_remove_right_rim)
                         ? edge_ingress_remove_right_rim : ingress_remove_right_rim;
     in_z_center    = is_undef(ingress_z_center) ? edge_ingress_z_center : ingress_z_center;
 
-    clear_start  = rim_end_clearance_start(stem_gripper_sides, cornerpiecenum);
-    clear_finish = rim_end_clearance_finish(stem_gripper_sides, cornerpiecenum);
+    kind_start  = edge_join_start_kind(join_ends, join_sex);
+    kind_finish = edge_join_finish_kind(join_ends, join_sex);
+    corner_start  = (cornerpiecenum == 1 || cornerpiecenum == 2);
+    corner_finish = (cornerpiecenum == 2 || cornerpiecenum == 3);
+
+    clear_start  = rim_end_clearance_start(join_ends, join_sex, cornerpiecenum);
+    clear_finish = rim_end_clearance_finish(join_ends, join_sex, cornerpiecenum);
 
     zc_eff = is_undef(in_z_center) ? length / 2 : in_z_center;
     z0_bay = zc_eff - in_length / 2;
@@ -715,21 +768,18 @@ module rim_piece_assembly(
     hole_z = edge_cord_hole_z(length, hole_pos, do_ingress, in_length, in_z_center);
     hole_r = edge_cord_hole_outer_radius(hole_inner_d);
 
-    assert(stem_gripper_sides == 0 || stem_gripper_sides == 1
-            || stem_gripper_sides == 2 || stem_gripper_sides == 3,
-        "stem_gripper_sides must be 0, 1, 2, or 3");
+    assert(join_ends >= 0 && join_ends <= 4, "edge_join_ends must be 0..4");
+    assert(join_sex == "male" || join_sex == "female",
+        "edge_join_sex must be \"male\" or \"female\"");
     assert(cornerpiecenum == 0 || cornerpiecenum == 1
             || cornerpiecenum == 2 || cornerpiecenum == 3,
         "cornerpiecenum must be 0, 1, 2, or 3");
     assert(hole_pos == "left" || hole_pos == "middle" || hole_pos == "right",
         "cord_hole_pos must be \"left\", \"middle\", or \"right\"");
 
-    // Cord hole must clear corners / end grippers
     if (do_cord_hole) {
         assert(hole_z - hole_r >= clear_start && hole_z + hole_r <= length - clear_finish,
-            str("cord hole overlaps end corner/gripper zone at z=", hole_z));
-        // Cord hole must not sit in the open ingress bay on the main edge.
-        // (middle + ingress places the boss on the back wall — allowed.)
+            str("cord hole overlaps end corner/join zone at z=", hole_z));
         if (do_ingress && hole_pos != "middle") {
             assert(hole_z + hole_r <= z0_bay || hole_z - hole_r >= z1_bay,
                 str("cord hole must not pass through ingress bay (z=", hole_z,
@@ -744,7 +794,6 @@ module rim_piece_assembly(
 
     union() {
         difference() {
-            // Body: either continuous run or ingress U
             if (do_ingress)
                 edge_lid_ingress(
                     length, in_depth, in_length, in_no_rim, in_z_center,
@@ -754,42 +803,114 @@ module rim_piece_assembly(
                 linear_extrude(height = length, convexity = 4)
                     polygon(points = edge_profile_points);
 
-            // Cord-under gap: remove lower flange+stem in mid span
             if (do_cord_under)
                 edge_cord_under_cut(length, under_gap_len, edge_cord_under_keep_below);
         }
 
-        // Cord hole boss (unioned onto flange/rim); bore cut when enabled
         if (do_cord_hole)
             edge_cord_hole_feature(
                 length, hole_inner_d, hole_pos,
                 do_ingress, in_depth, in_length, in_z_center
             );
 
-        // Optional end stem-gripper assemblies
-        // 1 = start end only, 2 = both ends, 3 = finish end only
-        if (stem_gripper_sides == 1 || stem_gripper_sides == 2)
-            edge_end_stem_gripper_assembly(
+        // Start join — rotate 90° when this end terminates at a corner
+        if (kind_start != "none")
+            edge_end_join(
                 z_pos = -edge_gripper_len + edge_gripper_body_overlap
-                    + edge_gripper_body_overlap_z
+                    + edge_gripper_body_overlap_z,
+                kind = kind_start,
+                turn90 = corner_start
             );
 
-        if (stem_gripper_sides == 2 || stem_gripper_sides == 3)
-            edge_end_stem_gripper_assembly(
+        // Finish join
+        if (kind_finish != "none")
+            edge_end_join(
                 z_pos = length - edge_gripper_body_overlap
-                    - edge_gripper_body_overlap_z
+                    - edge_gripper_body_overlap_z,
+                kind = kind_finish,
+                turn90 = corner_finish
             );
 
-        // Corners: omit only Z-aligned (main-edge) stem grippers; keep arm grippers
-        if (cornerpiecenum == 1 || cornerpiecenum == 2)
+        // Corners: omit Z-mapped stem grippers; keep perpendicular arm grippers
+        if (corner_start)
             translate([cornersquare_len, 0, -edge_gripper_len])
             rotate([90, 270, 0])
-                corner_solid(include_stem_grippers = false);
+                corner_solid(include_along_y = true, include_along_x = false);
 
-        if (cornerpiecenum == 2 || cornerpiecenum == 3)
+        if (corner_finish)
             translate([cornersquare_len, 0, length + cornersquare_len])
             rotate([90, -180, 0])
-                corner_solid(include_stem_grippers = false);
+                corner_solid(include_along_y = false, include_along_x = true);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Corner-in-rim: two segments with independent lengths meeting at a corner
+// ---------------------------------------------------------------------------
+//
+// QUICK REFERENCE — rim_corner_assembly(...)
+//   length_a     segment along +Z before the corner (mm)
+//   length_b     segment along -X after the corner (mm)
+//   join_a       free end of A: 0=none, 1=male, 2=female
+//   join_b       free end of B: 0=none, 1=male, 2=female
+//   (cord / ingress options apply to segment A only in v1)
+//
+module rim_corner_assembly(
+    length_a = 80,
+    length_b = 80,
+    join_a = 0,   // 0 none, 1 male, 2 female — free start of A
+    join_b = 0,   // 0 none, 1 male, 2 female — free end of B
+    cord_hole = undef,
+    cord_hole_inner_d = undef,
+    cord_hole_pos = undef,
+    cord_under = undef,
+    cord_under_gap_len = undef,
+    lid_ingress = undef,
+    ingress_depth = undef,
+    ingress_length = undef,
+    ingress_remove_right_rim = undef,
+    ingress_z_center = undef
+) {
+    assert(join_a == 0 || join_a == 1 || join_a == 2, "join_a must be 0|1|2");
+    assert(join_b == 0 || join_b == 1 || join_b == 2, "join_b must be 0|1|2");
+    assert(length_a > 0 && length_b > 0, "segment lengths must be > 0");
+
+    ends_a = join_a == 0 ? 0 : 1;
+    sex_a  = join_a == 2 ? "female" : "male";
+    ends_b = join_b == 0 ? 0 : 3;
+    sex_b  = join_b == 2 ? "female" : "male";
+
+    union() {
+        // Segment A along +Z — corner only at finish (shared junction)
+        rim_piece_assembly(
+            length = length_a,
+            edge_join_ends = ends_a,
+            edge_join_sex = sex_a,
+            cornerpiecenum = 3,
+            cord_hole = cord_hole,
+            cord_hole_inner_d = cord_hole_inner_d,
+            cord_hole_pos = cord_hole_pos,
+            cord_under = cord_under,
+            cord_under_gap_len = cord_under_gap_len,
+            lid_ingress = lid_ingress,
+            ingress_depth = ingress_depth,
+            ingress_length = ingress_length,
+            ingress_remove_right_rim = ingress_remove_right_rim,
+            ingress_z_center = ingress_z_center
+        );
+
+        // Segment B along -X from the corner; no second corner solid
+        translate([0, 0, length_a])
+        rotate([0, -90, 0])
+            rim_piece_assembly(
+                length = length_b,
+                edge_join_ends = ends_b,
+                edge_join_sex = sex_b,
+                cornerpiecenum = 0,
+                cord_hole = false,
+                cord_under = false,
+                lid_ingress = false
+            );
     }
 }
 
@@ -797,6 +918,8 @@ module rim_piece_assembly(
 module edgereplica(
     length = edge_default_length,
     stem_gripper_sides = 0,
+    edge_join_ends = undef,
+    edge_join_sex = undef,
     cord_hole = undef,
     cord_hole_inner_d = undef,
     cord_hole_pos = undef,
@@ -812,6 +935,8 @@ module edgereplica(
     rim_piece_assembly(
         length = length,
         stem_gripper_sides = stem_gripper_sides,
+        edge_join_ends = edge_join_ends,
+        edge_join_sex = edge_join_sex,
         cord_hole = cord_hole,
         cord_hole_inner_d = cord_hole_inner_d,
         cord_hole_pos = cord_hole_pos,
