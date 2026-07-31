@@ -1,0 +1,1 @@
+../rim_piece_assembly.scad
