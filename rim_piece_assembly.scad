@@ -18,6 +18,8 @@
 //   4 = both ends female (forces female; ignores edge_join_sex)
 // edge_join_sex              "male"|"female"  sex for ends 1|2|3 (default "male")
 //   Male and female are mutually exclusive per end (never both on one end).
+//   Male unions protruding bars onto the rim; female differences enlarged
+//   pockets out of the main rim body (no separate socket cube).
 //   If that end also has a corner (cornerpiecenum), the join is rotated 90°.
 //
 // cornerpiecenum             0|1|2|3   corner solids on ends (default 0)
@@ -331,46 +333,49 @@ module edge_join_male(z_pos = 0) {
     edge_join_male_ridge(z_pos = z_pos, grow = 0);
 }
 
-// Female = socket body with pockets slightly larger than male (press fit).
-module edge_join_female(z_pos = 0) {
+// Female = cutter only (enlarged male). Caller must difference() this from the rim body.
+// No separate socket cube — pockets are cut out of the main rim assembly.
+module edge_join_female_cutter(z_pos = 0) {
     c = edge_join_fit_clearance;
-    // Socket envelope around glass-grip zone
-    body_x0 = edge_top_width_no_glass - edge_gripper_width - c;
-    body_w  = glass_thickness + edge_top_thickness + 2 * edge_gripper_width + 2 * c;
-    body_h  = edge_gripper_height + edge_top_thickness + 2 * c;
-    difference() {
-        translate([body_x0, -edge_top_thickness - edge_gripper_height - c, z_pos])
-            cube([body_w, body_h, edge_gripper_len]);
-        // Enlarged male negative for strong fit
-        edge_join_male_bars(z_pos = z_pos, grow = c);
-        edge_join_male_ridge(z_pos = z_pos, grow = c);
-    }
+    edge_join_male_bars(z_pos = z_pos, grow = c);
+    edge_join_male_ridge(z_pos = z_pos, grow = c);
 }
 
-// Single long-join module: male or female at z_pos.
+// Place male solid or female cutter at z_pos.
 // turn90: when rim ends at a corner, rotate join 90° onto the perpendicular arm.
 module edge_end_join(z_pos = 0, kind = "male", turn90 = false) {
     if (kind == "male" || kind == "female") {
         if (turn90) {
-            // Pivot about end so join faces the corner arm (-X) instead of +Z
             translate([0, 0, z_pos + edge_gripper_len / 2])
             rotate([0, -90, 0])
             translate([0, 0, -edge_gripper_len / 2]) {
                 if (kind == "male")
                     edge_join_male(z_pos = 0);
                 else
-                    edge_join_female(z_pos = 0);
+                    edge_join_female_cutter(z_pos = 0);
             }
         } else {
             if (kind == "male")
                 edge_join_male(z_pos = z_pos);
             else
-                edge_join_female(z_pos = z_pos);
+                edge_join_female_cutter(z_pos = z_pos);
         }
     }
 }
 
+// Z placement: males protrude past the end; females cut into the rim interior.
+function edge_join_z_start(kind) =
+    kind == "female"
+        ? 0
+        : (-edge_gripper_len + edge_gripper_body_overlap + edge_gripper_body_overlap_z);
+
+function edge_join_z_finish(kind, length) =
+    kind == "female"
+        ? (length - edge_gripper_len)
+        : (length - edge_gripper_body_overlap - edge_gripper_body_overlap_z);
+
 // Back-compat aliases
+module edge_join_female(z_pos = 0) { edge_join_female_cutter(z_pos = z_pos); }
 module edge_stem_gripper_pair(z_pos = 0) { edge_join_male_bars(z_pos = z_pos); }
 module edge_top_ridge_grip_cube(z_pos = 0) { edge_join_male_ridge(z_pos = z_pos); }
 module edge_end_stem_gripper_assembly(z_pos = -2) { edge_join_male(z_pos = z_pos); }
@@ -792,55 +797,67 @@ module rim_piece_assembly(
             "cord_under gap must fit between end accessories");
     }
 
-    union() {
-        difference() {
-            if (do_ingress)
-                edge_lid_ingress(
-                    length, in_depth, in_length, in_no_rim, in_z_center,
-                    clear_start = clear_start, clear_finish = clear_finish
-                );
-            else
-                linear_extrude(height = length, convexity = 4)
-                    polygon(points = edge_profile_points);
+    difference() {
+        union() {
+            difference() {
+                if (do_ingress)
+                    edge_lid_ingress(
+                        length, in_depth, in_length, in_no_rim, in_z_center,
+                        clear_start = clear_start, clear_finish = clear_finish
+                    );
+                else
+                    linear_extrude(height = length, convexity = 4)
+                        polygon(points = edge_profile_points);
 
-            if (do_cord_under)
-                edge_cord_under_cut(length, under_gap_len, edge_cord_under_keep_below);
+                if (do_cord_under)
+                    edge_cord_under_cut(length, under_gap_len, edge_cord_under_keep_below);
+            }
+
+            if (do_cord_hole)
+                edge_cord_hole_feature(
+                    length, hole_inner_d, hole_pos,
+                    do_ingress, in_depth, in_length, in_z_center
+                );
+
+            // Male joins — unioned onto the rim
+            if (kind_start == "male")
+                edge_end_join(
+                    z_pos = edge_join_z_start("male"),
+                    kind = "male",
+                    turn90 = corner_start
+                );
+            if (kind_finish == "male")
+                edge_end_join(
+                    z_pos = edge_join_z_finish("male", length),
+                    kind = "male",
+                    turn90 = corner_finish
+                );
+
+            // Corners: omit Z-mapped stem grippers; keep perpendicular arm grippers
+            if (corner_start)
+                translate([cornersquare_len, 0, -edge_gripper_len])
+                rotate([90, 270, 0])
+                    corner_solid(include_along_y = true, include_along_x = false);
+
+            if (corner_finish)
+                translate([cornersquare_len, 0, length + cornersquare_len])
+                rotate([90, -180, 0])
+                    corner_solid(include_along_y = false, include_along_x = true);
         }
 
-        if (do_cord_hole)
-            edge_cord_hole_feature(
-                length, hole_inner_d, hole_pos,
-                do_ingress, in_depth, in_length, in_z_center
-            );
-
-        // Start join — rotate 90° when this end terminates at a corner
-        if (kind_start != "none")
+        // Female joins — cut pockets out of the main rim (and any unioned solids)
+        if (kind_start == "female")
             edge_end_join(
-                z_pos = -edge_gripper_len + edge_gripper_body_overlap
-                    + edge_gripper_body_overlap_z,
-                kind = kind_start,
+                z_pos = edge_join_z_start("female"),
+                kind = "female",
                 turn90 = corner_start
             );
-
-        // Finish join
-        if (kind_finish != "none")
+        if (kind_finish == "female")
             edge_end_join(
-                z_pos = length - edge_gripper_body_overlap
-                    - edge_gripper_body_overlap_z,
-                kind = kind_finish,
+                z_pos = edge_join_z_finish("female", length),
+                kind = "female",
                 turn90 = corner_finish
             );
-
-        // Corners: omit Z-mapped stem grippers; keep perpendicular arm grippers
-        if (corner_start)
-            translate([cornersquare_len, 0, -edge_gripper_len])
-            rotate([90, 270, 0])
-                corner_solid(include_along_y = true, include_along_x = false);
-
-        if (corner_finish)
-            translate([cornersquare_len, 0, length + cornersquare_len])
-            rotate([90, -180, 0])
-                corner_solid(include_along_y = false, include_along_x = true);
     }
 }
 
