@@ -211,7 +211,10 @@ function edge_cord_hole_outer_radius(inner_d) =
 /* [Corner square — legacy print helpers / arm length] */
 cornersquare_len            = 15;
 corner_arm_len              = cornersquare_len; // perpendicular mitered arm
-corner_miter_joint          = 0.35;             // fuse overlap at 45° plane
+corner_miter_joint          = 0.35;             // fuse pull across 45° plane
+// Thin +X nest into the main so the arm unions without filling profile
+// channels (a full edge_top_width nest plugs the grooves at the corner).
+corner_arm_fuse_ext         = 2.0;
 cornersquare_rim_height     = 2.7;
 cornersquare_ridge_height   = 5;
 cornersquare_ridge_length   = 8.1;
@@ -570,17 +573,22 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
 // ---------------------------------------------------------------------------
 // 45° mitered corner arms (same edge profile — not separate corner_solid)
 //
-// Finish corner: one shared plane through (x,z)=(0, z_end) at +45° (XZ).
+// Finish corner (XZ): shared plane x + z = z_end through the outer corner.
 //   main keeps flip=true; arm keeps flip=false → faces meet with fuse pull.
-// Do not use Ry(270) for the arm or −45/+135 mismatched slabs — that parks
-// the arm past z_end and leaves a parallel-face gap (see preview).
+//
+// Arm orientation (rim_toward_neg_z=true / Ry(90)):
+//   outer flange (profile x=0) at z = z_end
+//   glass rim (profile x=max) at z = z_end − width  ← lower Z (blue line)
+//   channel at profile x=px continues on the arm at z = z_end − px (red line)
+//
+// Nest only corner_arm_fuse_ext into the main — a full-width nest fills the
+// grooves at the corner and breaks channel continuity.
 // ---------------------------------------------------------------------------
 
 module rim_corner_miter_clip(cx, cz, arm_len) {
     mw = edge_top_width;
     j  = corner_miter_joint;
     yh = edge_overall_height + edge_top_width + 2;
-    // Cover the overlap square and a bit of each leg.
     translate([cx - arm_len - j, -edge_overall_height - 1, cz - mw - j])
         cube([arm_len + mw + 2 * j, yh, mw + arm_len + 2 * j]);
 }
@@ -605,13 +613,13 @@ module rim_corner_start_miter_cut(arm_len = corner_arm_len) {
 // Perpendicular arm at finish (along -X), 45° miter into the main +Z run.
 module rim_corner_arm_finish(z_end, arm_len = corner_arm_len) {
     j    = corner_miter_joint;
+    ext  = corner_arm_fuse_ext;
     mw   = edge_top_width;
     span = edge_miter_span(arm_len, mw);
     difference() {
-        // Overlap into the main by mw so orthogonal profiles share volume at
-        // the corner. Arm z stays ≤ z_end (overlaps main), not past it.
-        translate([mw, 0, 0])
-            edge_run_neg_x(z_end, arm_len + mw + j, true, false);
+        // Thin +X nest for boolean union; glass rim stays at lower Z.
+        translate([ext, 0, 0])
+            edge_run_neg_x(z_end, arm_len + ext + j, true, false);
         edge_miter_slab(0, z_end, 45, flip = false, pull = j, span = span);
     }
 }
