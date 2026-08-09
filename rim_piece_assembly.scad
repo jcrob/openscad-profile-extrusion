@@ -457,9 +457,14 @@ module edge_run_z(z0, seg_len, remove_right_rim = false) {
             edge_profile_extrude(seg_len, remove_right_rim);
 }
 
+// Extrude profile along -X. rim_toward_neg_z selects which way the profile
+// faces after the bend (must keep z ∈ [z_flange − width, z_flange] so the
+// arm overlaps the +Z run — Ry(270) without −seg_len parks the arm past z_flange).
 module edge_run_neg_x(z_flange, seg_len, rim_toward_neg_z = true, remove_right_rim = false) {
     if (seg_len > 0.01) {
         if (rim_toward_neg_z) {
+            // (px,py,t) → (t − seg_len, py, z_flange − px): x ∈ [−seg_len, 0],
+            // z ∈ [z_flange − profile_w, z_flange] overlaps the main run.
             translate([-seg_len, 0, z_flange])
             rotate([0, 90, 0])
                 edge_profile_extrude(seg_len, remove_right_rim);
@@ -564,20 +569,27 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
 
 // ---------------------------------------------------------------------------
 // 45° mitered corner arms (same edge profile — not separate corner_solid)
+//
+// Finish corner: one shared plane through (x,z)=(0, z_end) at +45° (XZ).
+//   main keeps flip=true; arm keeps flip=false → faces meet with fuse pull.
+// Do not use Ry(270) for the arm or −45/+135 mismatched slabs — that parks
+// the arm past z_end and leaves a parallel-face gap (see preview).
 // ---------------------------------------------------------------------------
 
 module rim_corner_miter_clip(cx, cz, arm_len) {
     mw = edge_top_width;
     j  = corner_miter_joint;
     yh = edge_overall_height + edge_top_width + 2;
-    translate([cx - mw - j, -edge_overall_height - 1, cz - mw - j])
-        cube([mw + arm_len + 2 * j, yh, mw + arm_len + 2 * j]);
+    // Cover the overlap square and a bit of each leg.
+    translate([cx - arm_len - j, -edge_overall_height - 1, cz - mw - j])
+        cube([arm_len + mw + 2 * j, yh, mw + arm_len + 2 * j]);
 }
 
 // Localized so start+finish miters cannot delete the whole bar.
 module rim_corner_finish_miter_cut(z_end, arm_len = corner_arm_len) {
     span = edge_miter_span(arm_len, edge_top_width);
     intersection() {
+        // Complement of rim_corner_arm_finish's slab (same rot, opposite flip).
         edge_miter_slab(0, z_end, 45, flip = true, pull = corner_miter_joint, span = span);
         rim_corner_miter_clip(0, z_end, arm_len);
     }
@@ -596,7 +608,8 @@ module rim_corner_arm_finish(z_end, arm_len = corner_arm_len) {
     mw   = edge_top_width;
     span = edge_miter_span(arm_len, mw);
     difference() {
-        // Overlap into the main by mw so the orthogonal profiles share volume.
+        // Overlap into the main by mw so orthogonal profiles share volume at
+        // the corner. Arm z stays ≤ z_end (overlaps main), not past it.
         translate([mw, 0, 0])
             edge_run_neg_x(z_end, arm_len + mw + j, true, false);
         edge_miter_slab(0, z_end, 45, flip = false, pull = j, span = span);
