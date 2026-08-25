@@ -5,7 +5,8 @@ include <rim_piece_assembly.scad>
 /* [Demo selection] */
 demo_mode = "default";
 // "default" | "male_both" | "female_both" | "start_male_finish_female"
-// | "start_female_finish_male" | "corner_end" | "rim_corner" | "ingress" | "combo"
+// | "start_female_finish_male" | "corner_end" | "rim_corner" | "ingress"
+// | "combo" | "rim_corner_ingress_a" | "rim_corner_ingress_b"
 
 if (demo_mode == "default")
     rim_piece_assembly(length = edge_default_length);
@@ -54,4 +55,32 @@ if (demo_mode == "combo")
         lid_ingress = true,
         ingress_depth = 28,
         ingress_length = 35
+    );
+
+if (demo_mode == "rim_corner_ingress_a")
+    rim_corner_assembly(
+        length_a = 120,
+        length_b = 100,
+        join_b = 2,
+        cord_hole = true,
+        cord_hole_pos = "left",
+        cord_hole_on = "a",
+        lid_ingress = true,
+        ingress_depth = 28,
+        ingress_length = 35,
+        ingress_on = "a"
+    );
+
+if (demo_mode == "rim_corner_ingress_b")
+    rim_corner_assembly(
+        length_a = 120,
+        length_b = 160,
+        join_b = 2,
+        cord_hole = true,
+        cord_hole_pos = "middle",
+        cord_hole_on = "b",
+        lid_ingress = true,
+        ingress_depth = 28,
+        ingress_length = 50,
+        ingress_on = "b"
     );
