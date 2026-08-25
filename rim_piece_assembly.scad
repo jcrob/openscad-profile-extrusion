@@ -1224,35 +1224,52 @@ module rim_corner_assembly(
                 " (bay padded=", bay_len, " z=[", z0_b, ",", z1_b, "])"));
     }
 
-    // Integrated corner arm on A (original B miter from rim_corner_arm_finish).
-    // Features on B are applied on the free arm past W — no separate B start cut.
+    // Integrated corner arm on A (original B corner miter from rim_corner_arm_finish).
+    // Ingress on B: bay-cut the free arm first, then union ingress arms/back so
+    // the bay cutter cannot slice the perpendicular miters (kept the A↔B corner).
     difference() {
         union() {
-            rim_piece_assembly(
-                length = length_a,
-                edge_join_ends = 0,
-                cornerpiecenum = 3,
-                corner_arm_length = length_b,
-                cord_hole = cord_on_a,
-                cord_hole_inner_d = cord_hole_inner_d,
-                cord_hole_pos = cord_hole_pos,
-                cord_under = under_on_a,
-                cord_under_gap_len = cord_under_gap_len,
-                lid_ingress = ingress_on_a,
-                ingress_depth = ingress_depth,
-                ingress_length = ingress_on_a ? in_len_raw : 0,
-                ingress_remove_right_rim = ingress_remove_right_rim,
-                glass_sit = glass_sit,
-                ingress_z_center = ingress_z_center
-            );
-
-            if (cord_on_b)
-                rim_corner_b_free(length_a)
-                    edge_cord_hole_feature(
-                        length_b, hole_inner_d, hole_pos,
-                        ingress_on_b, in_depth, bay_len, in_zc
+            difference() {
+                union() {
+                    rim_piece_assembly(
+                        length = length_a,
+                        edge_join_ends = 0,
+                        cornerpiecenum = 3,
+                        corner_arm_length = length_b,
+                        cord_hole = cord_on_a,
+                        cord_hole_inner_d = cord_hole_inner_d,
+                        cord_hole_pos = cord_hole_pos,
+                        cord_under = under_on_a,
+                        cord_under_gap_len = cord_under_gap_len,
+                        lid_ingress = ingress_on_a,
+                        ingress_depth = ingress_depth,
+                        ingress_length = ingress_on_a ? in_len_raw : 0,
+                        ingress_remove_right_rim = ingress_remove_right_rim,
+                        glass_sit = glass_sit,
+                        ingress_z_center = ingress_z_center
                     );
 
+                    if (cord_on_b)
+                        rim_corner_b_free(length_a)
+                            edge_cord_hole_feature(
+                                length_b, hole_inner_d, hole_pos,
+                                ingress_on_b, in_depth, bay_len, in_zc
+                            );
+                }
+
+                // Cut bay into B arm body only (before appending ingress arms).
+                if (ingress_on_b)
+                    rim_corner_b_free(length_a)
+                        edge_ingress_bay_opening_cut(
+                            z0_b, z1_b, in_depth, bay_len, in_no_rim, zc_b
+                        );
+
+                if (under_on_b)
+                    rim_corner_b_free(length_a)
+                        edge_cord_under_cut(length_b, under_gap, edge_cord_under_keep_below);
+            }
+
+            // Perpendicular ingress arms + back — unioned after the bay cut.
             if (ingress_on_b) {
                 rim_corner_b_free(length_a) {
                     edge_ingress_arm_near(z0_b, in_depth, bay_len, in_no_rim, do_glass);
@@ -1267,16 +1284,6 @@ module rim_corner_assembly(
                 translate([0, 0, length_a])
                     rim_corner_join_finish(length_b, "male");
         }
-
-        if (ingress_on_b)
-            rim_corner_b_free(length_a)
-                edge_ingress_bay_opening_cut(
-                    z0_b, z1_b, in_depth, bay_len, in_no_rim, zc_b
-                );
-
-        if (under_on_b)
-            rim_corner_b_free(length_a)
-                edge_cord_under_cut(length_b, under_gap, edge_cord_under_keep_below);
 
         if (join_a == 2)
             edge_end_join(z_pos = edge_join_z_start("female"), kind = "female");
