@@ -680,6 +680,7 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
 //   left flange (profile x=0) at z = z_end − W   ← lower Z, meets main flange
 //   glass hook (profile x=W)  at z = z_end
 //   feature at profile x=px continues on the arm at z = z_end − W + px
+//   arm_len = TOTAL arm length; extrude t ∈ [0, arm_len]; tip at world x = W − arm_len
 // ---------------------------------------------------------------------------
 
 module rim_corner_miter_clip(z_end, arm_len) {
@@ -707,15 +708,17 @@ module rim_corner_start_miter_cut(arm_len = corner_arm_len) {
 }
 
 // Perpendicular arm at finish (along −X). Flange at lower Z.
+// arm_len is the TOTAL segment length (miter band + free run), same meaning as
+// length_a — tip at local t = arm_len → world x = W − arm_len (span = arm_len).
 module rim_corner_arm_finish(z_end, arm_len = corner_arm_len) {
     j    = corner_miter_joint;
     W    = edge_profile_max_x;
     span = edge_miter_span(arm_len, W);
     difference() {
-        // (px,py,t) → (W − t, py, z_end − W + px)
+        // (px,py,t) → (W − t, py, z_end − W + px); t ∈ [0, arm_len]
         translate([W, 0, z_end - W])
         rotate([0, -90, 0])
-            edge_profile_extrude(arm_len + W + j, false);
+            edge_profile_extrude(arm_len + j, false);
         edge_miter_slab(0, z_end - W, -45, flip = true, pull = j, span = span);
     }
 }
@@ -728,9 +731,10 @@ module rim_corner_arm_start(arm_len = corner_arm_len) {
 
 // Joins at the flipped arm tip — same Ry(−90) frame as rim_corner_arm_finish.
 // Caller translates to the Z-piece finish (z = length) first.
+// arm_len = total B length; tip is at local t = arm_len (not arm_len + W).
 module rim_corner_join_finish(arm_len, kind) {
     W = edge_profile_max_x;
-    local_tip = W + arm_len;
+    local_tip = arm_len;
     translate([W, 0, -W])
     rotate([0, -90, 0]) {
         if (kind == "male")
@@ -1129,13 +1133,15 @@ module rim_piece_assembly(
 // ---------------------------------------------------------------------------
 //
 // QUICK REFERENCE — rim_corner_assembly(...)
-//   length_a     segment along +Z before the corner (mm)
-//   length_b     mitered arm along -X after the corner (mm)
+//   length_a     segment along +Z before the corner (mm) — total length
+//   length_b     mitered arm along -X after the corner (mm) — total length
+//                (includes the W miter band; free run = length_b − W)
 //   join_a       free start of A: 0=none, 1=male, 2=female
 //   join_b       free tip of B arm: 0=none, 1=male, 2=female
 //   cord_hole_on / ingress_on / cord_under_on
 //                "a" | "b" — place that feature on segment A or B (default "a")
 //   ingress_length  0 = off; otherwise >= edge_ingress_length_min
+//                   (clear opening; bay pads +2W for the perpendicular miters)
 //   Single fused solid — integrated 45° corner arm (no separate B start miter).
 //
 // Frame for features on free length_b (past the W miter overlap on the arm).
@@ -1147,7 +1153,8 @@ module rim_corner_b_frame(length_a) {
         children();
 }
 
-// Local free-arm origin: skip the W miter band so feature z stays in [0, length_b].
+// Local free-arm origin: skip the W miter band.
+// Feature z ∈ [0, length_b − W] with tip at free z = length_b − W.
 module rim_corner_b_free(length_a) {
     W = edge_profile_max_x;
     rim_corner_b_frame(length_a)
@@ -1209,9 +1216,16 @@ module rim_corner_assembly(
     hole_pos     = is_undef(cord_hole_pos) ? edge_cord_hole_pos : cord_hole_pos;
     under_gap    = is_undef(cord_under_gap_len) ? edge_cord_under_gap_len : cord_under_gap_len;
 
+    W_b = edge_profile_max_x;
+    // length_b is total arm length (like length_a); free run past miter band:
+    free_len_b = length_b - W_b;
+    assert(free_len_b > 0,
+        str("length_b must be > profile width ", W_b, " (got ", length_b, ")"));
+
     // Padded bay length used by edge_lid_ingress / bay cutters.
-    bay_len = in_len_raw + 2 * edge_profile_max_x;
-    zc_b    = is_undef(in_zc) ? length_b / 2 : in_zc;
+    // ingress_length = clear opening; +2W for the perpendicular arm miters.
+    bay_len = in_len_raw + 2 * W_b;
+    zc_b    = is_undef(in_zc) ? free_len_b / 2 : in_zc;
     z0_b    = zc_b - bay_len / 2;
     z1_b    = zc_b + bay_len / 2;
 
@@ -1219,9 +1233,10 @@ module rim_corner_assembly(
         assert(in_len_raw >= edge_ingress_length_min,
             str("ingress_length must be 0 (off) or >= ", edge_ingress_length_min,
                 " so bay miters do not interact (got ", in_len_raw, ")"));
-        assert(z0_b >= 0 && z1_b <= length_b,
-            str("ingress on B must fit in free length_b=", length_b,
-                " (bay padded=", bay_len, " z=[", z0_b, ",", z1_b, "])"));
+        assert(z0_b >= 0 && z1_b <= free_len_b,
+            str("ingress on B must fit in free length ", free_len_b,
+                " (length_b=", length_b, " − W=", W_b,
+                "; bay padded=", bay_len, " z=[", z0_b, ",", z1_b, "])"));
     }
 
     // Integrated corner arm on A (original B corner miter from rim_corner_arm_finish).
@@ -1252,7 +1267,7 @@ module rim_corner_assembly(
                     if (cord_on_b)
                         rim_corner_b_free(length_a)
                             edge_cord_hole_feature(
-                                length_b, hole_inner_d, hole_pos,
+                                free_len_b, hole_inner_d, hole_pos,
                                 ingress_on_b, in_depth, bay_len, in_zc
                             );
                 }
@@ -1266,7 +1281,7 @@ module rim_corner_assembly(
 
                 if (under_on_b)
                     rim_corner_b_free(length_a)
-                        edge_cord_under_cut(length_b, under_gap, edge_cord_under_keep_below);
+                        edge_cord_under_cut(free_len_b, under_gap, edge_cord_under_keep_below);
             }
 
             // Perpendicular ingress arms + back — unioned after the bay cut.
