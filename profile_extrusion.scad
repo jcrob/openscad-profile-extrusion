@@ -43,7 +43,7 @@ if (demo_mode == "ingress")
         length = 150,
         lid_ingress = true,
         ingress_depth = 30,
-        ingress_length = 40
+        ingress_length = 70
     );
 
 if (demo_mode == "combo")
@@ -54,12 +54,12 @@ if (demo_mode == "combo")
         cord_hole_pos = "left",
         lid_ingress = true,
         ingress_depth = 28,
-        ingress_length = 35
+        ingress_length = 70
     );
 
 if (demo_mode == "rim_corner_ingress_a")
     rim_corner_assembly(
-        length_a = 120,
+        length_a = 160,
         length_b = 100,
         join_b = 2,
         cord_hole = true,
@@ -67,20 +67,20 @@ if (demo_mode == "rim_corner_ingress_a")
         cord_hole_on = "a",
         lid_ingress = true,
         ingress_depth = 28,
-        ingress_length = 35,
+        ingress_length = 70,
         ingress_on = "a"
     );
 
 if (demo_mode == "rim_corner_ingress_b")
     rim_corner_assembly(
         length_a = 120,
-        length_b = 160,
+        length_b = 170,
         join_b = 2,
         cord_hole = true,
         cord_hole_pos = "middle",
         cord_hole_on = "b",
         lid_ingress = true,
         ingress_depth = 28,
-        ingress_length = 50,
+        ingress_length = 10,
         ingress_on = "b"
     );

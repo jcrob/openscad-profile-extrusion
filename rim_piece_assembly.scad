@@ -39,9 +39,11 @@
 //
 // lid_ingress / ingress_depth / ingress_length / ingress_remove_right_rim
 //   U bay for spline + pass-through. Bay must fit within length.
-//   ingress_length: 0 = off; otherwise >= edge_ingress_length_min so the
-//   two bay miters do not interact.
-//   Arms/back share 45° miters with a fuse overlap (edge_ingress_joint).
+//   ingress_length: 0 = off; otherwise >= edge_ingress_length_min.
+//   Visible length of the U along the piece (outer span / back wall).
+//   If long enough for full-profile 45° seats (roughly > 2×profile width),
+//   arms are mitered inside the bay; shorter bays use a square U so the
+//   length still matches the input (not input + 2×profile).
 //   glass_sit (default true): on start/finish arms, open the glass-sit
 //   channel (world X = glass band) from hook tips up to the top-ridge
 //   underside so the Z-run channel continues through the arms. When
@@ -108,7 +110,7 @@ edge_cord_under_keep_below  = 5.0;
 /* [3) Lid ingress — U bay of flange+stem edges for spline + pass-through] */
 edge_ingress_enable         = false;
 edge_ingress_depth          = 30.0;
-edge_ingress_length         = 40.0;  // 0 = off; see edge_ingress_length_min when on
+edge_ingress_length         = 70.0;  // 0 = off; visible U length (mitered if > ~2W)
 edge_ingress_remove_right_rim = false;
 edge_ingress_glass_sit      = true;  // strip right rim on arms in glass-sit band
 edge_ingress_z_center       = undef;
@@ -638,35 +640,105 @@ module edge_ingress_back(z0, z1, depth, bay_len, remove_right_rim) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Lid ingress — bay_len is the visible length along the piece (outer span).
+// When bay_len is large enough for full-profile 45° seats (bay > 2W), use
+// mitered arms inside the bay. Otherwise use a square U with thin end walls
+// so short lengths (e.g. 10) still match the input.
+// ---------------------------------------------------------------------------
+
+edge_ingress_square_wall = edge_top_thickness; // thin end-wall along Z for short bays
+
+module edge_ingress_bay_square_cut(z0, z1) {
+    W  = edge_profile_max_x;
+    j  = edge_ingress_joint;
+    y0 = -edge_overall_height - 1;
+    yh = edge_overall_height + W + 2;
+    if (z1 > z0)
+        translate([-j, y0, z0])
+            cube([W + 2 * j, yh, z1 - z0]);
+}
+
+module edge_ingress_arm_square_near(z0, depth, wall, remove_right_rim, glass_sit = true) {
+    j = edge_ingress_joint;
+    W = edge_profile_max_x;
+    y0 = -edge_overall_height;
+    yh = edge_overall_height + edge_top_ridge_grip_h + 0.02;
+    // Axis-aligned side wall (short bays cannot fit full-profile 45° arms).
+    translate([-depth - j, y0, z0 - j])
+        cube([depth + W + 2 * j, yh, wall + 2 * j]);
+}
+
+module edge_ingress_arm_square_far(z1, depth, wall, remove_right_rim, glass_sit = true) {
+    j = edge_ingress_joint;
+    W = edge_profile_max_x;
+    y0 = -edge_overall_height;
+    yh = edge_overall_height + edge_top_ridge_grip_h + 0.02;
+    translate([-depth - j, y0, z1 - wall - j])
+        cube([depth + W + 2 * j, yh, wall + 2 * j]);
+}
+
+module edge_ingress_back_square(z0, z1, depth, remove_right_rim) {
+    j = edge_ingress_joint;
+    // Overlap into the end walls so square corners fuse.
+    translate([-depth, 0, 0])
+        edge_run_z(z0 - j, (z1 - z0) + 2 * j, remove_right_rim);
+}
+
+function edge_ingress_use_miters(bay_len, remove_right_rim, glass_sit) =
+    let (
+        mw = edge_ingress_profile_w(remove_right_rim),
+        arm_w = (glass_sit && !remove_right_rim) ? edge_profile_max_x : mw
+    )
+    bay_len > 2 * arm_w + 1;
+
+function edge_ingress_square_wall_t(bay_len) =
+    min(edge_ingress_square_wall, max(edge_ingress_length_min, bay_len / 3));
+
+module edge_ingress_cut(z0, z1, depth, bay_len, remove_right_rim, zc, glass_sit = true) {
+    if (edge_ingress_use_miters(bay_len, remove_right_rim, glass_sit))
+        edge_ingress_bay_opening_cut(z0, z1, depth, bay_len, remove_right_rim, zc);
+    else
+        edge_ingress_bay_square_cut(z0, z1);
+}
+
+module edge_ingress_arms_back(z0, z1, depth, bay_len, remove_right_rim, glass_sit = true) {
+    if (edge_ingress_use_miters(bay_len, remove_right_rim, glass_sit)) {
+        edge_ingress_arm_near(z0, depth, bay_len, remove_right_rim, glass_sit);
+        edge_ingress_arm_far(z1, depth, bay_len, remove_right_rim, glass_sit);
+        edge_ingress_back(z0, z1, depth, bay_len, remove_right_rim);
+    } else {
+        wall = edge_ingress_square_wall_t(bay_len);
+        edge_ingress_arm_square_near(z0, depth, wall, remove_right_rim, glass_sit);
+        edge_ingress_arm_square_far(z1, depth, wall, remove_right_rim, glass_sit);
+        edge_ingress_back_square(z0, z1, depth, remove_right_rim);
+    }
+}
+
 module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_center,
     clear_start = 0, clear_finish = 0, glass_sit = true
 ) {
     zc = is_undef(z_center) ? length / 2 : z_center;
     z0 = zc - bay_len / 2;
     z1 = zc + bay_len / 2;
-    mw = edge_ingress_profile_w(remove_right_rim);
-    // Arms keep full outer width when glass_sit selectively strips the rim.
-    arm_ref_w = (glass_sit && !remove_right_rim) ? edge_profile_max_x : mw;
-    need_start  = arm_ref_w + clear_start;
-    need_finish = arm_ref_w + clear_finish;
+    need_start  = clear_start;
+    need_finish = clear_finish;
 
     assert(bay_len > 0, "ingress bay length must be > 0");
-    assert(bay_len > 2 * arm_ref_w + 1,
-        str("ingress bay too short for 45° miters across profile: bay=", bay_len,
-            " need > ", 2 * arm_ref_w + 1));
-    assert(bay_len <= length,
-        str("ingress bay too long for piece + end accessories: bay=", bay_len,
-            " need clearances start=", need_start, " finish=", need_finish,
+    assert(bay_len >= edge_ingress_length_min,
+        str("ingress bay too short: bay=", bay_len,
+            " need >= ", edge_ingress_length_min));
+    assert(z0 >= need_start && z1 <= length - need_finish,
+        str("ingress bay out of range: bay=[", z0, ",", z1,
+            "] need start>=", need_start, " finish<=", length - need_finish,
             " within length=", length));
 
     union() {
         difference() {
             edge_run_z(0, length, false);
-            edge_ingress_bay_opening_cut(z0, z1, depth, bay_len, remove_right_rim, zc);
+            edge_ingress_cut(z0, z1, depth, bay_len, remove_right_rim, zc, glass_sit);
         }
-        edge_ingress_arm_near(z0, depth, bay_len, remove_right_rim, glass_sit);
-        edge_ingress_arm_far(z1, depth, bay_len, remove_right_rim, glass_sit);
-        edge_ingress_back(z0, z1, depth, bay_len, remove_right_rim);
+        edge_ingress_arms_back(z0, z1, depth, bay_len, remove_right_rim, glass_sit);
     }
 }
 
@@ -991,8 +1063,8 @@ module rim_piece_assembly(
                         && ((is_undef(ingress_length) ? edge_ingress_length : ingress_length) > 0);
     in_depth       = is_undef(ingress_depth) ? edge_ingress_depth : ingress_depth;
     in_length_raw  = is_undef(ingress_length) ? edge_ingress_length : ingress_length;
-    // Pad bay by full profile width so outer-rim miters fit (same X as Z-piece).
-    in_length      = in_length_raw + 2 * edge_profile_max_x;
+    // Visible U length along the piece (no +2W pad).
+    in_length      = in_length_raw;
     in_no_rim      = is_undef(ingress_remove_right_rim)
                         ? edge_ingress_remove_right_rim : ingress_remove_right_rim;
     do_glass_sit   = is_undef(glass_sit) ? edge_ingress_glass_sit : glass_sit;
@@ -1141,7 +1213,7 @@ module rim_piece_assembly(
 //   cord_hole_on / ingress_on / cord_under_on
 //                "a" | "b" — place that feature on segment A or B (default "a")
 //   ingress_length  0 = off; otherwise >= edge_ingress_length_min
-//                   (clear opening; bay pads +2W for the perpendicular miters)
+//                   (visible U length along the piece; no +2W pad)
 //   Single fused solid — integrated 45° corner arm (no separate B start miter).
 //
 // Frame for features on free length_b (past the W miter overlap on the arm).
@@ -1222,9 +1294,8 @@ module rim_corner_assembly(
     assert(free_len_b > 0,
         str("length_b must be > profile width ", W_b, " (got ", length_b, ")"));
 
-    // Padded bay length used by edge_lid_ingress / bay cutters.
-    // ingress_length = clear opening; +2W for the perpendicular arm miters.
-    bay_len = in_len_raw + 2 * W_b;
+    // ingress_length = visible U length along B (no +2W pad).
+    bay_len = in_len_raw;
     zc_b    = is_undef(in_zc) ? free_len_b / 2 : in_zc;
     z0_b    = zc_b - bay_len / 2;
     z1_b    = zc_b + bay_len / 2;
@@ -1232,11 +1303,11 @@ module rim_corner_assembly(
     if (ingress_on_b) {
         assert(in_len_raw >= edge_ingress_length_min,
             str("ingress_length must be 0 (off) or >= ", edge_ingress_length_min,
-                " so bay miters do not interact (got ", in_len_raw, ")"));
+                " (got ", in_len_raw, ")"));
         assert(z0_b >= 0 && z1_b <= free_len_b,
             str("ingress on B must fit in free length ", free_len_b,
                 " (length_b=", length_b, " − W=", W_b,
-                "; bay padded=", bay_len, " z=[", z0_b, ",", z1_b, "])"));
+                "; bay=", bay_len, " z=[", z0_b, ",", z1_b, "])"));
     }
 
     // Integrated corner arm on A (original B corner miter from rim_corner_arm_finish).
@@ -1275,8 +1346,8 @@ module rim_corner_assembly(
                 // Cut bay into B arm body only (before appending ingress arms).
                 if (ingress_on_b)
                     rim_corner_b_free(length_a)
-                        edge_ingress_bay_opening_cut(
-                            z0_b, z1_b, in_depth, bay_len, in_no_rim, zc_b
+                        edge_ingress_cut(
+                            z0_b, z1_b, in_depth, bay_len, in_no_rim, zc_b, do_glass
                         );
 
                 if (under_on_b)
@@ -1285,13 +1356,11 @@ module rim_corner_assembly(
             }
 
             // Perpendicular ingress arms + back — unioned after the bay cut.
-            if (ingress_on_b) {
-                rim_corner_b_free(length_a) {
-                    edge_ingress_arm_near(z0_b, in_depth, bay_len, in_no_rim, do_glass);
-                    edge_ingress_arm_far(z1_b, in_depth, bay_len, in_no_rim, do_glass);
-                    edge_ingress_back(z0_b, z1_b, in_depth, bay_len, in_no_rim);
-                }
-            }
+            if (ingress_on_b)
+                rim_corner_b_free(length_a)
+                    edge_ingress_arms_back(
+                        z0_b, z1_b, in_depth, bay_len, in_no_rim, do_glass
+                    );
 
             if (join_a == 1)
                 edge_end_join(z_pos = edge_join_z_start("male"), kind = "male");
