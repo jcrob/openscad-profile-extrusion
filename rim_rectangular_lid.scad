@@ -1,5 +1,7 @@
 // Rectangular aquarium lid — rim frame from glass size + modular pieces.
 // Uses rim_piece_assembly / rim_corner_assembly (max 200 mm per straight).
+// Corner arms default to rim_max_piece_len (200 mm); remaining side runs are
+// split into straight segments ≤ rim_max_piece_len with clockwise male/female joins.
 //
 // QUICK START
 //   include <rim_rectangular_lid.scad>
@@ -39,7 +41,7 @@ glass_depth       = 450;   // inner opening along +Z (mm)
 
 /* [Build limits] */
 rim_max_piece_len = 200;   // max straight length (mm)
-rim_corner_leg    = 0;     // 0 = auto (edge_profile_max_x)
+rim_corner_leg    = 0;     // 0 = use rim_max_piece_len (200 mm)
 
 /* [Layout] */
 rim_layout        = "assembled"; // "assembled" | "blowout" | "plate"
@@ -97,21 +99,20 @@ function rim_corner_feat(corner_idx, corners = corner_features) =
 // Length / join planning
 // ---------------------------------------------------------------------------
 
-function rim_corner_leg_len(corner_leg = rim_corner_leg) =
-    let(W = edge_profile_max_x)
-    corner_leg > W ? corner_leg : (W + 1);
+function rim_corner_leg_len(corner_leg = rim_corner_leg, max_len = rim_max_piece_len) =
+    corner_leg > edge_profile_max_x ? corner_leg : max_len;
 
-function rim_corner_feat_min_leg(f) =
+function rim_corner_feat_min_leg(f, corner_leg = rim_corner_leg) =
     rim_feat_ingress(f)
-        ? max(edge_profile_max_x + 1, rim_feat_ingress_len(f) + 4)
-        : rim_corner_leg_len();
+        ? max(rim_corner_leg_len(corner_leg), rim_feat_ingress_len(f) + 4)
+        : rim_corner_leg_len(corner_leg);
 
 function rim_rect_effective_corner_leg(corners = corner_features, corner_leg = rim_corner_leg) =
     let (
-        mins = [ for (c = corners) rim_corner_feat_min_leg(c) ],
-        need = len(mins) > 0 ? max(mins) : rim_corner_leg_len(corner_leg)
+        mins = [ for (c = corners) rim_corner_feat_min_leg(c, corner_leg) ],
+        base = rim_corner_leg_len(corner_leg)
     )
-    max(need, rim_corner_leg_len(corner_leg));
+    len(mins) > 0 ? max(base, max(mins)) : base;
 
 // Straight run between corner legs along one glass side.
 function rim_side_straight_total(glass_dim, leg = undef, corners = corner_features) =
@@ -150,26 +151,27 @@ function rim_rect_side_seg_lens(side_idx, gw = glass_width, gd = glass_depth,
 
 // ---------------------------------------------------------------------------
 // Placement — native rim coords: path in XZ, profile in XY, Y = up
-// Corners: SW=0, SE=1, NE=2, NW=3 (CCW). Sides: 0=S +X, 1=E +Z, 2=N -X, 3=W -Z
+// Corners: SW=0, SE=1, NE=2, NW=3. Clockwise frame: S +X, E +Z, N -X, W -Z.
+// Native rim_corner: A along +Z, B along -X after the miter.
 // ---------------------------------------------------------------------------
 
-function rim_rect_corner_angle(ci) = ci * 90;
+// Clockwise joint pattern: female pockets on both free arms (join 2) receive
+// male straight ends; straights chain male→female between segments.
+function rim_rect_corner_joins(ci) = [2, 2];
 
-module rim_rect_orient_yaw(angle_deg) {
-    rotate([0, angle_deg, 0])
-        children();
-}
-
-// Default rim_corner: A leg +Z, B leg -X. Yaw then optional mirror for +X south leg.
 module rim_rect_corner_pose(ci) {
+    // SW: mirror so B runs +X (south); A runs +Z (west).
     if (ci == 0)
-        rim_rect_orient_yaw(0) mirror([1, 0, 0]) children();
+        mirror([1, 0, 0]) children();
+    // SE: native A +Z (east), B -X (south).
     else if (ci == 1)
-        rim_rect_orient_yaw(90) children();
+        children();
+    // NE: A -Z (east), B -X (north).
     else if (ci == 2)
-        rim_rect_orient_yaw(180) mirror([1, 0, 0]) children();
+        rotate([0, 180, 0]) mirror([1, 0, 0]) children();
+    // NW: A -Z (west), B +X (north).
     else
-        rim_rect_orient_yaw(270) children();
+        rotate([0, 180, 0]) children();
 }
 
 function rim_rect_corner_pos(ci, gw = glass_width, gd = glass_depth) =
@@ -183,14 +185,15 @@ module rim_rect_place_corner(ci, leg = undef, feat = undef,
 ) {
     leg_eff = is_undef(leg) ? rim_rect_effective_corner_leg(corners) : leg;
     f = is_undef(feat) ? rim_corner_feat(ci, corners) : feat;
+    joins = rim_rect_corner_joins(ci);
     p = rim_rect_corner_pos(ci, gw, gd);
     translate(p)
     rim_rect_corner_pose(ci)
         rim_corner_assembly(
             length_a = leg_eff,
             length_b = leg_eff,
-            join_a = 2,
-            join_b = 2,
+            join_a = joins[0],
+            join_b = joins[1],
             cord_hole = rim_feat_cord(f),
             cord_hole_inner_d = rim_feat_cord_d(f),
             cord_hole_pos = rim_feat_cord_pos(f),
@@ -247,11 +250,13 @@ module rim_rect_place_straight(side_idx, seg_idx, length, feat = undef,
 }
 
 module rim_rect_place_side(side_idx, gw = glass_width, gd = glass_depth,
-    side_feat_lists = [side_features_s, side_features_e, side_features_n, side_features_w]
+    side_feat_lists = [side_features_s, side_features_e, side_features_n, side_features_w],
+    corners = corner_features
 ) {
     segs = rim_rect_side_seg_lens(side_idx, gw, gd, rim_max_piece_len, corners);
     for (i = [0 : len(segs) - 1])
-        rim_rect_place_straight(side_idx, i, segs[i], side_feat_lists = side_feat_lists);
+        rim_rect_place_straight(side_idx, i, segs[i],
+            gw = gw, gd = gd, side_feat_lists = side_feat_lists, corners = corners);
 }
 
 // ---------------------------------------------------------------------------
@@ -299,9 +304,9 @@ module rim_rect_lid_assembled(gw = glass_width, gd = glass_depth,
 ) {
     leg = rim_rect_effective_corner_leg(corners);
     for (ci = [0 : 3])
-        rim_rect_place_corner(ci, leg, rim_corner_feat(ci, corners), gw, gd);
+        rim_rect_place_corner(ci, leg, rim_corner_feat(ci, corners), gw, gd, corners);
     for (si = [0 : 3])
-        rim_rect_place_side(si, gw, gd, side_feat_lists);
+        rim_rect_place_side(si, gw, gd, side_feat_lists, corners);
 }
 
 module rim_rect_plate_item(part, leg, gw, gd, corners, side_feat_lists) {
@@ -326,28 +331,71 @@ function rim_rect_pack_positions(parts, idx = 0, cx = rim_plate_margin, cy = rim
     )
     rim_rect_pack_positions(parts, idx + 1, ncx, ny, nrh, concat(out, [[nx, ny]]));
 
+module rim_rect_blowout_corner(ci, leg, feat) {
+    joins = rim_rect_corner_joins(ci);
+    rim_rect_corner_pose(ci)
+        rim_corner_assembly(
+            length_a = leg,
+            length_b = leg,
+            join_a = joins[0],
+            join_b = joins[1],
+            cord_hole = rim_feat_cord(feat),
+            cord_hole_inner_d = rim_feat_cord_d(feat),
+            cord_hole_pos = rim_feat_cord_pos(feat),
+            cord_hole_on = rim_feat_cord_on(feat),
+            cord_under = rim_feat_under(feat),
+            cord_under_gap_len = rim_feat_under_gap(feat),
+            cord_under_on = rim_feat_under_on(feat),
+            lid_ingress = rim_feat_ingress(feat),
+            ingress_depth = rim_feat_ingress_dep(feat),
+            ingress_length = rim_feat_ingress_len(feat),
+            ingress_on = rim_feat_ingress_on(feat)
+        );
+}
+
+module rim_rect_blowout_straight(side_idx, seg_idx, length, feat, seg_count) {
+    joins = rim_rect_straight_joins(seg_idx, seg_count);
+    rotate([0, rim_rect_side_yaw(side_idx), 0])
+        rim_piece_assembly(
+            length = length,
+            edge_join_ends = joins,
+            cord_hole = rim_feat_cord(feat),
+            cord_hole_inner_d = rim_feat_cord_d(feat),
+            cord_hole_pos = rim_feat_cord_pos(feat),
+            cord_under = rim_feat_under(feat),
+            cord_under_gap_len = rim_feat_under_gap(feat),
+            lid_ingress = rim_feat_ingress(feat),
+            ingress_depth = rim_feat_ingress_dep(feat),
+            ingress_length = rim_feat_ingress_len(feat)
+        );
+}
+
 module rim_rect_lid_blowout(gw = glass_width, gd = glass_depth,
     corners = corner_features,
     side_feat_lists = [side_features_s, side_features_e, side_features_n, side_features_w],
     gap = rim_layout_gap * 2
 ) {
     leg = rim_rect_effective_corner_leg(corners);
+    corner_span = 2 * leg + edge_profile_max_x + gap;
     for (ci = [0 : 3])
-        translate([ci * (2 * leg + gap), 0, 0])
-        rim_rect_print_flat()
-            rim_rect_place_corner(ci, leg, rim_corner_feat(ci, corners), gw, gd);
+        translate([ci * corner_span, 0, 0])
+            rim_rect_blowout_corner(ci, leg, rim_corner_feat(ci, corners));
 
-    y0 = 2 * leg + gap * 2;
+    y0 = corner_span + gap;
+    row_h = rim_max_piece_len + gap;
     for (si = [0 : 3]) {
-        segs = rim_rect_side_seg_lens(si, gw, gd);
+        segs = rim_rect_side_seg_lens(si, gw, gd, rim_max_piece_len, corners);
         for (i = [0 : len(segs) - 1])
             translate([
                 rim_rect_seg_offset(segs, i) + i * gap,
-                y0 + si * (rim_max_piece_len / 3 + gap),
+                y0 + si * row_h,
                 0
             ])
-            rim_rect_print_flat()
-                rim_rect_place_straight(si, i, segs[i], side_feat_lists = side_feat_lists);
+                rim_rect_blowout_straight(
+                    si, i, segs[i],
+                    rim_side_feat(si, i, side_feat_lists),
+                    len(segs)
+                );
     }
 }
 
