@@ -160,16 +160,16 @@ function rim_rect_side_seg_lens(side_idx, gw = glass_width, gd = glass_depth,
 function rim_rect_corner_joins(ci) = [2, 2];
 
 module rim_rect_corner_pose(ci) {
-    // Base +90° Y so corner profile matches straight pieces; per-corner yaw.
-    rotate([0, 90, 0]) {
+    // Base −180° Y so corner profile matches straight pieces; per-corner yaw.
+    rotate([0, -180, 0]) {
         if (ci == 0)
             children();                                    // SW: +X south, +Z west
         else if (ci == 1)
-            mirror([1, 0, 0]) rotate([0, 180, 0]) children(); // SE: −X south, +Z east
+            mirror([1, 0, 0]) children();                // SE: −X south, +Z east
         else if (ci == 2)
-            rotate([0, 180, 0]) children();               // NE: −X north, −Z east
+            rotate([0, 180, 0]) children();              // NE: −X north, −Z east
         else
-            rotate([0, 90, 0]) children();                  // NW: +X north, −Z west
+            rotate([0, 90, 0]) children();               // NW: +X north, −Z west
     }
 }
 
@@ -179,13 +179,40 @@ function rim_rect_corner_pos(ci, gw = glass_width, gd = glass_depth) =
     ci == 2 ? [gw, 0, gd] :
               [0, 0, gd];
 
+// Pose anchor: shift from glass-corner pos so arms meet straights (−180° Y base).
+function rim_rect_corner_anchor(ci, leg) =
+    ci == 0 ? [0, 0, leg] :
+    ci == 1 ? [0, 0, leg] :
+    ci == 2 ? [0, 0, -leg] :
+              [leg, 0, 0];
+
+// Blowout: push pieces outward in XZ while keeping row/column alignment.
+function rim_rect_blowout_corner_offset(ci, gap) =
+    ci == 0 ? [-gap, 0, -gap] :
+    ci == 1 ? [ gap, 0, -gap] :
+    ci == 2 ? [ gap, 0,  gap] :
+              [-gap, 0,  gap];
+
+function rim_rect_blowout_side_offset(si, gap) =
+    si == 0 ? [0, 0, -gap] :
+    si == 1 ? [ gap, 0, 0] :
+    si == 2 ? [0, 0,  gap] :
+              [-gap, 0, 0];
+
+function rim_rect_blowout_chain_skew(si, seg_idx, gap) =
+    si == 0 ? [seg_idx * gap, 0, 0] :
+    si == 1 ? [0, 0, seg_idx * gap] :
+    si == 2 ? [-seg_idx * gap, 0, 0] :
+              [0, 0, -seg_idx * gap];
+
 module rim_rect_place_corner(ci, leg = undef, feat = undef,
-    gw = glass_width, gd = glass_depth, corners = corner_features
+    gw = glass_width, gd = glass_depth, corners = corner_features,
+    offset = [0, 0, 0]
 ) {
     leg_eff = is_undef(leg) ? rim_rect_effective_corner_leg(corners) : leg;
     f = is_undef(feat) ? rim_corner_feat(ci, corners) : feat;
     joins = rim_rect_corner_joins(ci);
-    p = rim_rect_corner_pos(ci, gw, gd);
+    p = rim_rect_corner_pos(ci, gw, gd) + rim_rect_corner_anchor(ci, leg_eff) + offset;
     translate(p)
     rim_rect_corner_pose(ci)
         rim_corner_assembly(
@@ -217,7 +244,9 @@ function rim_rect_seg_offset(segs, seg_idx, acc = 0, i = 0) =
 module rim_rect_place_straight(side_idx, seg_idx, length, feat = undef,
     gw = glass_width, gd = glass_depth, leg = undef,
     side_feat_lists = [side_features_s, side_features_e, side_features_n, side_features_w],
-    corners = corner_features
+    corners = corner_features,
+    offset = [0, 0, 0],
+    chain_gap = 0
 ) {
     leg_eff = is_undef(leg) ? rim_rect_effective_corner_leg(corners) : leg;
     f = is_undef(feat)
@@ -226,12 +255,14 @@ module rim_rect_place_straight(side_idx, seg_idx, length, feat = undef,
     segs = rim_rect_side_seg_lens(side_idx, gw, gd, rim_max_piece_len, corners);
     joins = rim_rect_straight_joins(seg_idx, len(segs));
     offset_along = leg_eff + rim_rect_seg_offset(segs, seg_idx);
+    chain = rim_rect_blowout_chain_skew(side_idx, seg_idx, chain_gap);
 
     translate(
-        side_idx == 0 ? [offset_along, 0, 0] :
-        side_idx == 1 ? [gw, 0, offset_along] :
-        side_idx == 2 ? [gw - offset_along, 0, gd] :
-                        [0, 0, gd - offset_along]
+        (side_idx == 0 ? [offset_along, 0, 0] :
+         side_idx == 1 ? [gw, 0, offset_along] :
+         side_idx == 2 ? [gw - offset_along, 0, gd] :
+                         [0, 0, gd - offset_along])
+        + chain + offset
     )
     rotate([0, rim_rect_side_yaw(side_idx), 0])
         rim_piece_assembly(
@@ -330,39 +361,25 @@ function rim_rect_pack_positions(parts, idx = 0, cx = rim_plate_margin, cy = rim
     )
     rim_rect_pack_positions(parts, idx + 1, ncx, ny, nrh, concat(out, [[nx, ny]]));
 
-module rim_rect_blowout_corner(ci, leg, feat) {
-    joins = rim_rect_corner_joins(ci);
-    rim_rect_corner_pose(ci)
-        rim_corner_assembly(
-            length_a = leg,
-            length_b = leg,
-            join_a = joins[0],
-            join_b = joins[1],
-            cord_hole = rim_feat_cord(feat),
-            cord_hole_inner_d = rim_feat_cord_d(feat),
-            cord_hole_pos = rim_feat_cord_pos(feat),
-            cord_hole_on = rim_feat_cord_on(feat),
-            cord_under = rim_feat_under(feat),
-            cord_under_gap_len = rim_feat_under_gap(feat),
-            cord_under_on = rim_feat_under_on(feat),
-            lid_ingress = rim_feat_ingress(feat),
-            ingress_depth = rim_feat_ingress_dep(feat),
-            ingress_length = rim_feat_ingress_len(feat),
-            ingress_on = rim_feat_ingress_on(feat)
-        );
+module rim_rect_blowout_corner(ci, leg, feat, gap,
+    gw = glass_width, gd = glass_depth, corners = corner_features
+) {
+    rim_rect_place_corner(
+        ci, leg, feat, gw, gd, corners,
+        offset = rim_rect_blowout_corner_offset(ci, gap)
+    );
 }
 
 module rim_rect_lid_blowout(gw = glass_width, gd = glass_depth,
     corners = corner_features,
     side_feat_lists = [side_features_s, side_features_e, side_features_n, side_features_w],
-    gap = rim_layout_gap
+    gap = rim_layout_gap * 2
 ) {
     leg = rim_rect_effective_corner_leg(corners);
 
-    // Blowout lives in the XZ plane (Y = 0). Horizontal runs share Z; vertical runs share X.
+    // XZ plane only: rows share Z, columns share X; gaps separate pieces outward.
     for (ci = [0 : 3])
-        translate(rim_rect_corner_pos(ci, gw, gd))
-            rim_rect_blowout_corner(ci, leg, rim_corner_feat(ci, corners));
+        rim_rect_blowout_corner(ci, leg, rim_corner_feat(ci, corners), gap, gw, gd, corners);
 
     for (si = [0 : 3]) {
         segs = rim_rect_side_seg_lens(si, gw, gd, rim_max_piece_len, corners);
@@ -370,7 +387,9 @@ module rim_rect_lid_blowout(gw = glass_width, gd = glass_depth,
             rim_rect_place_straight(
                 si, i, segs[i],
                 gw = gw, gd = gd, leg = leg,
-                side_feat_lists = side_feat_lists, corners = corners
+                side_feat_lists = side_feat_lists, corners = corners,
+                offset = rim_rect_blowout_side_offset(si, gap),
+                chain_gap = gap
             );
     }
 }
