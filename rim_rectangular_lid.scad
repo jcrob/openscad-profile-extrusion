@@ -175,9 +175,9 @@ module rim_rect_corner_pose(ci) {
 
 function rim_rect_corner_pos(ci, gw = glass_width, gd = glass_depth) =
     ci == 0 ? [0, 0, 0] :
-    ci == 1 ? [gw, 0, 0] :
-    ci == 2 ? [gw, 0, gd] :
-              [0, 0, gd];
+    ci == 1 ? [gw - 2 * edge_profile_max_x, 0, 0] :
+    ci == 2 ? [gw - 2 * edge_profile_max_x, 0, gd] :
+              [-edge_profile_max_x, 0, gd - edge_profile_max_x];
 
 // Pose anchor: shift from glass-corner pos so arms meet straights (−180° Y base).
 function rim_rect_corner_anchor(ci, leg) =
@@ -258,9 +258,9 @@ module rim_rect_place_straight(side_idx, seg_idx, length, feat = undef,
     chain = rim_rect_blowout_chain_skew(side_idx, seg_idx, chain_gap);
 
     translate(
-        (side_idx == 0 ? [offset_along, 0, 0] :
-         side_idx == 1 ? [gw, 0, offset_along] :
-         side_idx == 2 ? [gw - offset_along, 0, gd] :
+        (side_idx == 0 ? [offset_along - edge_profile_max_x, 0, edge_profile_max_x] :
+         side_idx == 1 ? [gw - 2 * edge_profile_max_x, 0, offset_along] :
+         side_idx == 2 ? [gw - offset_along - edge_profile_max_x, 0, gd - edge_profile_max_x] :
                          [0, 0, gd - offset_along])
         + chain + offset
     )
