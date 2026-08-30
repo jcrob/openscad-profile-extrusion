@@ -41,7 +41,8 @@ glass_depth       = 450;   // inner opening along +Z (mm)
 
 /* [Build limits] */
 rim_max_piece_len = 200;   // max straight length (mm)
-rim_corner_leg    = 0;     // 0 = use rim_max_piece_len (200 mm)
+rim_corner_leg    = 0;     // 0 = auto from glass size (see rim_rect_effective_corner_leg)
+rim_corner_split  = 400;   // side ≤ this → corner = side/2; else corner = rim_max_piece_len
 
 /* [Layout] */
 rim_layout        = "assembled"; // "assembled" | "blowout" | "plate"
@@ -99,32 +100,51 @@ function rim_corner_feat(corner_idx, corners = corner_features) =
 // Length / join planning
 // ---------------------------------------------------------------------------
 
-function rim_corner_leg_len(corner_leg = rim_corner_leg, max_len = rim_max_piece_len) =
-    corner_leg > edge_profile_max_x ? corner_leg : max_len;
+// Corner arm length from one glass side: ≤split → side/2, else max print length.
+function rim_corner_leg_for_dim(dim, max_len = rim_max_piece_len, split = rim_corner_split) =
+    dim <= split ? dim / 2 : max_len;
 
-function rim_corner_feat_min_leg(f, corner_leg = rim_corner_leg) =
-    rim_feat_ingress(f)
-        ? max(rim_corner_leg_len(corner_leg), rim_feat_ingress_len(f) + 4)
-        : rim_corner_leg_len(corner_leg);
-
-function rim_rect_effective_corner_leg(corners = corner_features, corner_leg = rim_corner_leg) =
+// Uniform corner arms (length_a = length_b): limited by both glass width and depth.
+function rim_rect_auto_corner_leg(gw, gd, max_len = rim_max_piece_len, split = rim_corner_split) =
     let (
-        mins = [ for (c = corners) rim_corner_feat_min_leg(c, corner_leg) ],
-        base = rim_corner_leg_len(corner_leg)
+        leg_w = rim_corner_leg_for_dim(gw, max_len, split),
+        leg_d = rim_corner_leg_for_dim(gd, max_len, split)
     )
-    len(mins) > 0 ? max(base, max(mins)) : base;
+    max(edge_profile_max_x + 1, min(leg_w, leg_d));
+
+function rim_corner_feat_min_leg(f, base_leg) =
+    rim_feat_ingress(f)
+        ? max(base_leg, rim_feat_ingress_len(f) + 4)
+        : base_leg;
+
+function rim_rect_effective_corner_leg(
+    gw = glass_width, gd = glass_depth,
+    corners = corner_features, corner_leg = rim_corner_leg,
+    max_len = rim_max_piece_len, split = rim_corner_split
+) =
+    let (
+        auto_leg = rim_rect_auto_corner_leg(gw, gd, max_len, split),
+        base = corner_leg > edge_profile_max_x ? corner_leg : auto_leg,
+        mins = [ for (c = corners) rim_corner_feat_min_leg(c, base) ],
+        feat_need = len(mins) > 0 ? max(mins) : base
+    )
+    max(base, feat_need);
 
 // Straight run between corner legs along one glass side.
-function rim_side_straight_total(glass_dim, leg = undef, corners = corner_features) =
-    let (leg_eff = is_undef(leg) ? rim_rect_effective_corner_leg(corners) : leg)
-    max(0, glass_dim - 2 * leg_eff);
+function rim_side_straight_total(glass_dim, leg) =
+    max(0, glass_dim - 2 * leg);
 
-function rim_rect_partition(run_len, max_len = rim_max_piece_len) =
+// Maximize full-length pieces; one remainder segment if needed.
+function rim_rect_straight_segments(run_len, max_len = rim_max_piece_len) =
+    run_len <= 0 ? [] :
     let (
-        n = max(1, ceil(run_len / max_len)),
-        base = run_len / n
+        n_full = floor(run_len / max_len),
+        partial = run_len - n_full * max_len
     )
-    [ for (i = [0 : n - 1]) base ];
+    n_full == 0 ? [run_len] :
+    partial > 0
+        ? concat([ for (i = [0 : n_full - 1]) max_len ], [partial])
+        : [ for (i = [0 : n_full - 1]) max_len ];
 
 // edge_join_ends for a straight chained between female corner pockets.
 function rim_rect_straight_joins(seg_idx, seg_count) =
@@ -133,21 +153,24 @@ function rim_rect_straight_joins(seg_idx, seg_count) =
     seg_idx == seg_count - 1 ? 2 : // male from prev, male into corner
     1;                            // middle link
 
-function rim_rect_side_dims(gw = glass_width, gd = glass_depth, corners = corner_features) = [
-    rim_side_straight_total(gw, undef, corners),
-    rim_side_straight_total(gd, undef, corners),
-    rim_side_straight_total(gw, undef, corners),
-    rim_side_straight_total(gd, undef, corners)
-];
+function rim_rect_side_dims(gw = glass_width, gd = glass_depth, corners = corner_features) =
+    let (leg = rim_rect_effective_corner_leg(gw, gd, corners))
+    [
+        rim_side_straight_total(gw, leg),
+        rim_side_straight_total(gd, leg),
+        rim_side_straight_total(gw, leg),
+        rim_side_straight_total(gd, leg)
+    ];
 
 function rim_rect_side_seg_lens(side_idx, gw = glass_width, gd = glass_depth,
     max_len = rim_max_piece_len, corners = corner_features
 ) =
     let (
-        dims = rim_rect_side_dims(gw, gd, corners),
-        run  = dims[side_idx]
+        leg  = rim_rect_effective_corner_leg(gw, gd, corners),
+        dim  = (side_idx == 0 || side_idx == 2) ? gw : gd,
+        run  = rim_side_straight_total(dim, leg)
     )
-    rim_rect_partition(run, max_len);
+    rim_rect_straight_segments(run, max_len);
 
 // ---------------------------------------------------------------------------
 // Placement — native rim coords: path in XZ, profile in XY, Y = up
@@ -209,7 +232,7 @@ module rim_rect_place_corner(ci, leg = undef, feat = undef,
     gw = glass_width, gd = glass_depth, corners = corner_features,
     offset = [0, 0, 0]
 ) {
-    leg_eff = is_undef(leg) ? rim_rect_effective_corner_leg(corners) : leg;
+    leg_eff = is_undef(leg) ? rim_rect_effective_corner_leg(gw, gd, corners) : leg;
     f = is_undef(feat) ? rim_corner_feat(ci, corners) : feat;
     joins = rim_rect_corner_joins(ci);
     p = rim_rect_corner_pos(ci, gw, gd) + rim_rect_corner_anchor(ci, leg_eff) + offset;
@@ -248,7 +271,7 @@ module rim_rect_place_straight(side_idx, seg_idx, length, feat = undef,
     offset = [0, 0, 0],
     chain_gap = 0
 ) {
-    leg_eff = is_undef(leg) ? rim_rect_effective_corner_leg(corners) : leg;
+    leg_eff = is_undef(leg) ? rim_rect_effective_corner_leg(gw, gd, corners) : leg;
     f = is_undef(feat)
         ? rim_side_feat(side_idx, seg_idx, side_feat_lists)
         : feat;
@@ -284,9 +307,10 @@ module rim_rect_place_side(side_idx, gw = glass_width, gd = glass_depth,
     corners = corner_features
 ) {
     segs = rim_rect_side_seg_lens(side_idx, gw, gd, rim_max_piece_len, corners);
-    for (i = [0 : len(segs) - 1])
-        rim_rect_place_straight(side_idx, i, segs[i],
-            gw = gw, gd = gd, side_feat_lists = side_feat_lists, corners = corners);
+    if (len(segs) > 0)
+        for (i = [0 : len(segs) - 1])
+            rim_rect_place_straight(side_idx, i, segs[i],
+                gw = gw, gd = gd, side_feat_lists = side_feat_lists, corners = corners);
 }
 
 // ---------------------------------------------------------------------------
@@ -332,7 +356,7 @@ module rim_rect_lid_assembled(gw = glass_width, gd = glass_depth,
     corners = corner_features,
     side_feat_lists = [side_features_s, side_features_e, side_features_n, side_features_w]
 ) {
-    leg = rim_rect_effective_corner_leg(corners);
+    leg = rim_rect_effective_corner_leg(gw, gd, corners);
     for (ci = [0 : 3])
         rim_rect_place_corner(ci, leg, rim_corner_feat(ci, corners), gw, gd, corners);
     for (si = [0 : 3])
@@ -375,7 +399,7 @@ module rim_rect_lid_blowout(gw = glass_width, gd = glass_depth,
     side_feat_lists = [side_features_s, side_features_e, side_features_n, side_features_w],
     gap = rim_layout_gap * 2
 ) {
-    leg = rim_rect_effective_corner_leg(corners);
+    leg = rim_rect_effective_corner_leg(gw, gd, corners);
 
     // XZ plane only: rows share Z, columns share X; gaps separate pieces outward.
     for (ci = [0 : 3])
@@ -383,14 +407,15 @@ module rim_rect_lid_blowout(gw = glass_width, gd = glass_depth,
 
     for (si = [0 : 3]) {
         segs = rim_rect_side_seg_lens(si, gw, gd, rim_max_piece_len, corners);
-        for (i = [0 : len(segs) - 1])
-            rim_rect_place_straight(
-                si, i, segs[i],
-                gw = gw, gd = gd, leg = leg,
-                side_feat_lists = side_feat_lists, corners = corners,
-                offset = rim_rect_blowout_side_offset(si, gap),
-                chain_gap = gap
-            );
+        if (len(segs) > 0)
+            for (i = [0 : len(segs) - 1])
+                rim_rect_place_straight(
+                    si, i, segs[i],
+                    gw = gw, gd = gd, leg = leg,
+                    side_feat_lists = side_feat_lists, corners = corners,
+                    offset = rim_rect_blowout_side_offset(si, gap),
+                    chain_gap = gap
+                );
     }
 }
 
@@ -398,7 +423,7 @@ module rim_rect_lid_plate(gw = glass_width, gd = glass_depth,
     corners = corner_features,
     side_feat_lists = [side_features_s, side_features_e, side_features_n, side_features_w]
 ) {
-    leg = rim_rect_effective_corner_leg(corners);
+    leg = rim_rect_effective_corner_leg(gw, gd, corners);
     rim_rect_draw_plate_outline();
 
     parts = concat(
@@ -408,9 +433,10 @@ module rim_rect_lid_plate(gw = glass_width, gd = glass_depth,
         ],
         [ for (si = [0 : 3])
             let (segs = rim_rect_side_seg_lens(si, gw, gd))
-            for (i = [0 : len(segs) - 1])
-                let (fp = rim_rect_straight_footprint(segs[i]))
-                [fp[0], fp[1], "straight", si, i, segs[i]]
+            if (len(segs) > 0)
+                for (i = [0 : len(segs) - 1])
+                    let (fp = rim_rect_straight_footprint(segs[i]))
+                    [fp[0], fp[1], "straight", si, i, segs[i]]
         ]
     );
 
@@ -437,11 +463,13 @@ module rim_rectangular_lid(
     side_feats_n = side_features_n,
     side_feats_w = side_features_w
 ) {
-    assert(glass_w > 2 * rim_rect_effective_corner_leg(corners), "glass_width too small for corners");
-    assert(glass_d > 2 * rim_rect_effective_corner_leg(corners), "glass_depth too small for corners");
+    assert(glass_w >= 2 * rim_rect_effective_corner_leg(glass_w, glass_d, corners),
+        "glass_width too small for corners");
+    assert(glass_d >= 2 * rim_rect_effective_corner_leg(glass_w, glass_d, corners),
+        "glass_depth too small for corners");
 
   // BOM echo
-    leg = rim_rect_effective_corner_leg(corners);
+    leg = rim_rect_effective_corner_leg(glass_w, glass_d, corners);
     dims = rim_rect_side_dims(glass_w, glass_d, corners);
     echo(str(
         "Rim lid ", glass_w, "×", glass_d, " mm glass; corner leg=", leg,
