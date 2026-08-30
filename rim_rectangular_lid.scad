@@ -217,11 +217,20 @@ function rim_rect_blowout_gap_size(gap = rim_layout_gap * 2) =
 // Extra run offset per segment: gap after corner, then between each chained piece.
 function rim_rect_blowout_along_extra(seg_idx, gap) = (seg_idx + 1) * gap;
 
-function rim_rect_blowout_corner_offset(ci, gap) =
-    ci == 0 ? [-gap, 0, -gap] :
-    ci == 1 ? [ gap, 0, -gap] :
-    ci == 2 ? [ gap, 0,  gap] :
-              [-gap, 0,  gap];
+// Corner blowout: base outward clearance + extra along axis where a multi-seg side ends.
+function rim_rect_blowout_corner_offset(ci, gap, gw, gd, corners = corner_features) =
+    let (
+        ns = len(rim_rect_side_seg_lens(0, gw, gd, rim_max_piece_len, corners)),
+        ne = len(rim_rect_side_seg_lens(1, gw, gd, rim_max_piece_len, corners)),
+        nn = len(rim_rect_side_seg_lens(2, gw, gd, rim_max_piece_len, corners)),
+        nw = len(rim_rect_side_seg_lens(3, gw, gd, rim_max_piece_len, corners)),
+        base = gap + edge_profile_max_x
+    )
+    // SW ends west chain / starts south; SE ends south / starts east; etc.
+    ci == 0 ? [-base - nw * gap, 0, -base] :
+    ci == 1 ? [ base + ns * gap, 0, -base] :
+    ci == 2 ? [ base + ne * gap, 0,  base] :
+              [-base - nn * gap, 0,  base];
 
 function rim_rect_blowout_side_offset(si, gap) =
     si == 0 ? [0, 0, -gap] :
@@ -391,7 +400,7 @@ module rim_rect_blowout_corner(ci, leg, feat, gap,
 ) {
     rim_rect_place_corner(
         ci, leg, feat, gw, gd, corners,
-        offset = rim_rect_blowout_corner_offset(ci, gap)
+        offset = rim_rect_blowout_corner_offset(ci, gap, gw, gd, corners)
     );
 }
 
