@@ -1,7 +1,7 @@
 // Rectangular aquarium lid — rim frame from glass size + modular pieces.
 // Uses rim_piece_assembly / rim_corner_assembly (max 200 mm per straight).
-// Corner arms default to rim_max_piece_len (200 mm); remaining side runs are
-// split into straight segments ≤ rim_max_piece_len with clockwise male/female joins.
+// Corner arms default from glass size (≤400 mm side → side/2, else 200 mm);
+// straight runs maximize 200 mm pieces with one remainder segment.
 //
 // QUICK START
 //   include <rim_rectangular_lid.scad>
@@ -49,6 +49,7 @@ rim_layout        = "assembled"; // "assembled" | "blowout" | "plate"
 rim_plate_x       = 250;    // printable bed X (mm)
 rim_plate_y       = 250;    // printable bed Y (mm)
 rim_layout_gap    = 12;     // spacing between parts (mm)
+rim_blowout_gap   = 0;      // 0 = auto (layout_gap×2 + profile width)
 rim_plate_margin  = 8;      // bed edge margin (mm)
 
 /* [Corner features — SW, SE, NE, NW] */
@@ -210,6 +211,12 @@ function rim_rect_corner_anchor(ci, leg) =
               [leg, 0, 0];
 
 // Blowout: push pieces outward in XZ while keeping row/column alignment.
+function rim_rect_blowout_gap_size(gap = rim_layout_gap * 2) =
+    rim_blowout_gap > 0 ? rim_blowout_gap : gap + edge_profile_max_x;
+
+// Extra run offset per segment: gap after corner, then between each chained piece.
+function rim_rect_blowout_along_extra(seg_idx, gap) = (seg_idx + 1) * gap;
+
 function rim_rect_blowout_corner_offset(ci, gap) =
     ci == 0 ? [-gap, 0, -gap] :
     ci == 1 ? [ gap, 0, -gap] :
@@ -221,12 +228,6 @@ function rim_rect_blowout_side_offset(si, gap) =
     si == 1 ? [ gap, 0, 0] :
     si == 2 ? [0, 0,  gap] :
               [-gap, 0, 0];
-
-function rim_rect_blowout_chain_skew(si, seg_idx, gap) =
-    si == 0 ? [seg_idx * gap, 0, 0] :
-    si == 1 ? [0, 0, seg_idx * gap] :
-    si == 2 ? [-seg_idx * gap, 0, 0] :
-              [0, 0, -seg_idx * gap];
 
 module rim_rect_place_corner(ci, leg = undef, feat = undef,
     gw = glass_width, gd = glass_depth, corners = corner_features,
@@ -277,15 +278,15 @@ module rim_rect_place_straight(side_idx, seg_idx, length, feat = undef,
         : feat;
     segs = rim_rect_side_seg_lens(side_idx, gw, gd, rim_max_piece_len, corners);
     joins = rim_rect_straight_joins(seg_idx, len(segs));
-    offset_along = leg_eff + rim_rect_seg_offset(segs, seg_idx);
-    chain = rim_rect_blowout_chain_skew(side_idx, seg_idx, chain_gap);
+    along_extra = chain_gap > 0 ? rim_rect_blowout_along_extra(seg_idx, chain_gap) : 0;
+    offset_along = leg_eff + rim_rect_seg_offset(segs, seg_idx) + along_extra;
 
     translate(
         (side_idx == 0 ? [offset_along - edge_profile_max_x, 0, edge_profile_max_x] :
          side_idx == 1 ? [gw - 2 * edge_profile_max_x, 0, offset_along] :
          side_idx == 2 ? [gw - offset_along - edge_profile_max_x, 0, gd - edge_profile_max_x] :
                          [0, 0, gd - offset_along])
-        + chain + offset
+        + offset
     )
     rotate([0, rim_rect_side_yaw(side_idx), 0])
         rim_piece_assembly(
@@ -397,13 +398,14 @@ module rim_rect_blowout_corner(ci, leg, feat, gap,
 module rim_rect_lid_blowout(gw = glass_width, gd = glass_depth,
     corners = corner_features,
     side_feat_lists = [side_features_s, side_features_e, side_features_n, side_features_w],
-    gap = rim_layout_gap * 2
+    gap = undef
 ) {
     leg = rim_rect_effective_corner_leg(gw, gd, corners);
+    gap_eff = is_undef(gap) ? rim_rect_blowout_gap_size() : gap;
 
     // XZ plane only: rows share Z, columns share X; gaps separate pieces outward.
     for (ci = [0 : 3])
-        rim_rect_blowout_corner(ci, leg, rim_corner_feat(ci, corners), gap, gw, gd, corners);
+        rim_rect_blowout_corner(ci, leg, rim_corner_feat(ci, corners), gap_eff, gw, gd, corners);
 
     for (si = [0 : 3]) {
         segs = rim_rect_side_seg_lens(si, gw, gd, rim_max_piece_len, corners);
@@ -413,8 +415,8 @@ module rim_rect_lid_blowout(gw = glass_width, gd = glass_depth,
                     si, i, segs[i],
                     gw = gw, gd = gd, leg = leg,
                     side_feat_lists = side_feat_lists, corners = corners,
-                    offset = rim_rect_blowout_side_offset(si, gap),
-                    chain_gap = gap
+                    offset = rim_rect_blowout_side_offset(si, gap_eff),
+                    chain_gap = gap_eff
                 );
     }
 }
