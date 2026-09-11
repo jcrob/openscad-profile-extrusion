@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { alignmentGuides, sideSegments } from "./blowoutLayout.js";
+import { featureShapes, lPath, worldBounds } from "./rimDraw.js";
 import {
   CORD_POS_OPTIONS,
   CORNER_ARM_HINT,
@@ -40,39 +41,30 @@ function ArmSelect({ value, onChange, cornerIdx }) {
 }
 
 function FeatureMarks({ piece, ty }) {
-  const f = piece.feat || {};
-  const cx = piece.x + piece.w / 2;
-  const cy = ty(piece.z + piece.h / 2);
-  const marks = [];
-  if (featHasIngress(f)) {
-    const inset = Math.min(piece.w, piece.h) * 0.35;
-    marks.push(
+  return featureShapes(piece).map((s, i) => {
+    if (s.kind === "hole") {
+      return (
+        <circle
+          key={`${s.kind}-${i}`}
+          className="feat-hole"
+          cx={s.cx}
+          cy={ty(s.cz)}
+          r={s.r}
+        />
+      );
+    }
+    return (
       <rect
-        key="ingress"
-        className="feat-ingress"
-        x={piece.x + (piece.w > piece.h ? inset : 2)}
-        y={ty(piece.z + piece.h) + (piece.h > piece.w ? inset : 2)}
-        width={Math.max(4, piece.w - (piece.w > piece.h ? inset * 2 : 4))}
-        height={Math.max(4, piece.h - (piece.h > piece.w ? inset * 2 : 4))}
+        key={`${s.kind}-${i}`}
+        className={s.kind === "ingress" ? "feat-ingress" : "feat-under"}
+        x={s.x}
+        y={ty(s.z + s.h)}
+        width={s.w}
+        height={s.h}
+        rx={s.kind === "ingress" ? 3 : 1.5}
       />
     );
-  }
-  if (f.cord_hole) {
-    marks.push(<circle key="hole" className="feat-hole" cx={cx} cy={cy} r={6} />);
-  }
-  if (f.cord_under) {
-    marks.push(
-      <rect
-        key="under"
-        className="feat-under"
-        x={cx - 8}
-        y={cy - 3}
-        width={16}
-        height={6}
-      />
-    );
-  }
-  return marks;
+  });
 }
 
 function FeatureEditor({ piece, onChange }) {
@@ -286,14 +278,11 @@ export default function RimBuilder({
 
   const selected = logical.find((p) => p.id === selectedId) || null;
 
-  const pad = layout === "blowout" ? 80 : 48;
-  const minX = Math.min(0, ...pieces.map((p) => p.x)) - pad;
-  const minZ = Math.min(0, ...pieces.map((p) => p.z)) - pad;
-  const maxX = Math.max(gw, ...pieces.map((p) => p.x + p.w)) + pad;
-  const maxZ = Math.max(gd, ...pieces.map((p) => p.z + p.h)) + pad;
-  const vbW = maxX - minX;
-  const vbH = maxZ - minZ;
-  const ty = (z) => maxZ - z;
+  const frame = useMemo(() => {
+    const pad = layout === "blowout" ? 90 : 56;
+    return worldBounds(pieces, gw, gd, pad);
+  }, [pieces, gw, gd, layout]);
+  const { minX, minZ, maxX, maxZ, vbW, vbH, ty, viewBox } = frame;
 
   const updateSelected = (feat) => {
     if (!selected) return;
@@ -368,9 +357,10 @@ export default function RimBuilder({
       </div>
 
       <div className="rim-split">
-        <div className="blowout-svg-wrap">
+        <div className={`blowout-svg-wrap ${layout}`}>
           <svg
-            viewBox={`${minX} ${minZ} ${vbW} ${vbH}`}
+            viewBox={viewBox}
+            preserveAspectRatio="xMidYMid meet"
             role="img"
             aria-label={`${layout} lid with selectable pieces`}
           >
@@ -424,7 +414,7 @@ export default function RimBuilder({
               </>
             )}
 
-            {pieces.map((p, i) => {
+            {pieces.map((p) => {
               const featured = featActive(p.feat);
               const selectedPiece = p.id === selectedId;
               const cls = [
@@ -436,18 +426,18 @@ export default function RimBuilder({
                 .filter(Boolean)
                 .join(" ");
               return (
-                <g
-                  key={`${p.id}-${p.arm || i}`}
-                  className="piece-hit"
-                  onClick={() => onSelect(p.id)}
-                >
-                  <rect
-                    className={cls}
-                    x={p.x}
-                    y={ty(p.z + p.h)}
-                    width={p.w}
-                    height={p.h}
-                  />
+                <g key={p.id} className="piece-hit" onClick={() => onSelect(p.id)}>
+                  {p.points ? (
+                    <path className={cls} d={lPath(p.points, ty)} />
+                  ) : (
+                    <rect
+                      className={cls}
+                      x={p.x}
+                      y={ty(p.z + p.h)}
+                      width={p.w}
+                      height={p.h}
+                    />
+                  )}
                   <FeatureMarks piece={p} ty={ty} />
                 </g>
               );
@@ -457,8 +447,8 @@ export default function RimBuilder({
               <text
                 key={`lab-${p.id}`}
                 className={`piece-label${p.id === selectedId ? " on" : ""}`}
-                x={p.x + p.w / 2}
-                y={ty(p.z + p.h / 2) + 4}
+                x={p.labelX ?? p.x + p.w / 2}
+                y={ty(p.labelZ ?? p.z + p.h / 2) + 4}
                 onClick={() => onSelect(p.id)}
               >
                 {p.label}

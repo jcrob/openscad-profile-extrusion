@@ -3,10 +3,12 @@ import {
   alignmentGuides,
   autoCornerLeg,
   blowoutGapSize,
+  cornerDraw,
   cornerOffset,
   sideOffset,
   sideSegments,
 } from "../web/src/blowoutLayout.js";
+import { featureShapes, worldBounds } from "../web/src/rimDraw.js";
 import {
   applyFeatureMode,
   bomLines,
@@ -88,5 +90,24 @@ assert.ok(ingressBay(160) + 4 <= fatLid.leg);
 
 const guides = alignmentGuides(900, 600, blowoutGapSize(), autoCornerLeg(900, 600));
 assert.ok(guides.eastX > 900);
+
+const swL = cornerDraw(0, 0, 0, 200, 29.2);
+assert.equal(swL.points.length, 6, "complete L has 6 vertices");
+assert.ok(swL.z < 0 && swL.x < 0, "SW L includes outer south and west");
+assert.ok(swL.w > 200 && swL.h > 200, "SW L bbox is both arms");
+
+const south = assembled.pieces.find((p) => p.label === "S1");
+assert.ok(south && south.z < 0, "south straight sits below glass");
+const frame = worldBounds(assembled.pieces, 900, 600, 56);
+assert.ok(frame.minZ < south.z, "frame includes south draw-out");
+assert.ok(frame.ty(south.z) < frame.vbH, "south maps inside SVG viewBox");
+assert.match(frame.viewBox, / 0 /);
+
+const swFeat = featureShapes({
+  kind: "corner",
+  feat: demo.corners[0],
+  arms: swL.arms,
+});
+assert.ok(swFeat.some((s) => s.kind === "ingress" && s.w > 40), "SW ingress drawn on arm");
 
 console.log("ok  rim model + assembled/blowout + BOM checks passed");

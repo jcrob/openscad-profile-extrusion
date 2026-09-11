@@ -289,8 +289,11 @@ label.field.checkbox {
   display: block;
   width: 100%;
   height: auto;
-  min-height: 280px;
-  max-height: 520px;
+  min-height: 340px;
+}
+
+.blowout-svg-wrap.blowout svg {
+  min-height: 460px;
 }
 
 .blowout-svg-wrap .glass {
@@ -477,17 +480,21 @@ label.field.checkbox {
 }
 
 .blowout-svg-wrap .feat-ingress {
-  fill: rgba(11, 16, 14, 0.45);
+  fill: #0b100e;
+  stroke: #7ad0a4;
+  stroke-width: 1.2;
 }
 
 .blowout-svg-wrap .feat-hole {
   fill: #0b100e;
-  stroke: #e8f0eb;
-  stroke-width: 1.5;
+  stroke: #f4f7f5;
+  stroke-width: 1.6;
 }
 
 .blowout-svg-wrap .feat-under {
-  fill: #e0a24a;
+  fill: #0b100e;
+  stroke: #e0a24a;
+  stroke-width: 1.2;
 }
 
 .blowout-svg-wrap .piece-label {

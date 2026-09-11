@@ -68,6 +68,124 @@ export function alongExtra(segIdx, gap) {
   return (segIdx + 1) * gap;
 }
 
+/** Complete L outline + arm slots for one corner (world XZ). */
+export function cornerDraw(ci, x, z, leg, W = EDGE_PROFILE_MAX_X) {
+  let points;
+  let a;
+  let b;
+  if (ci === 0) {
+    // SW: A west (+Z), B south (+X)
+    points = [
+      [x - W, z - W],
+      [x + leg, z - W],
+      [x + leg, z],
+      [x, z],
+      [x, z + leg],
+      [x - W, z + leg],
+    ];
+    b = makeArm(x, z - W, leg, W, "x", 1, 0, 0, 1);
+    a = makeArm(x - W, z, W, leg, "z", 0, 1, 1, 0);
+  } else if (ci === 1) {
+    // SE: A east (+Z), B south (−X from miter)
+    points = [
+      [x + W, z - W],
+      [x + W, z + leg],
+      [x, z + leg],
+      [x, z],
+      [x - leg, z],
+      [x - leg, z - W],
+    ];
+    b = makeArm(x - leg, z - W, leg, W, "x", -1, 0, 0, 1);
+    a = makeArm(x, z, W, leg, "z", 0, 1, -1, 0);
+  } else if (ci === 2) {
+    // NE: A east (−Z), B north (−X)
+    points = [
+      [x + W, z + W],
+      [x - leg, z + W],
+      [x - leg, z],
+      [x, z],
+      [x, z - leg],
+      [x + W, z - leg],
+    ];
+    b = makeArm(x - leg, z, leg, W, "x", -1, 0, 0, -1);
+    a = makeArm(x, z - leg, W, leg, "z", 0, -1, -1, 0);
+  } else {
+    // NW: A west (−Z), B north (+X)
+    points = [
+      [x - W, z + W],
+      [x - W, z - leg],
+      [x, z - leg],
+      [x, z],
+      [x + leg, z],
+      [x + leg, z + W],
+    ];
+    b = makeArm(x, z, leg, W, "x", 1, 0, 0, -1);
+    a = makeArm(x - W, z - leg, W, leg, "z", 0, -1, 1, 0);
+  }
+  const xs = points.map((p) => p[0]);
+  const zs = points.map((p) => p[1]);
+  const minX = Math.min(...xs);
+  const minZ = Math.min(...zs);
+  return {
+    points,
+    arms: { a, b },
+    x: minX,
+    z: minZ,
+    w: Math.max(...xs) - minX,
+    h: Math.max(...zs) - minZ,
+    labelX: x + (ci === 1 || ci === 2 ? -leg / 3 : leg / 3),
+    labelZ: z + (ci === 2 || ci === 3 ? W / 2 : -W / 2),
+  };
+}
+
+export function straightDraw(si, x, z, w, h) {
+  let arm;
+  if (si === 0) arm = makeArm(x, z, w, h, "x", 1, 0, 0, 1);
+  else if (si === 1) arm = makeArm(x, z, w, h, "z", 0, 1, -1, 0);
+  else if (si === 2) arm = makeArm(x, z, w, h, "x", -1, 0, 0, -1);
+  else arm = makeArm(x, z, w, h, "z", 0, -1, 1, 0);
+  return { x, z, w, h, arms: { a: arm }, points: null };
+}
+
+function makeArm(x, z, w, h, axis, dirX, dirZ, inX, inZ) {
+  const length = axis === "x" ? w : h;
+  const thick = axis === "x" ? h : w;
+  if (axis === "x") {
+    return {
+      x,
+      z,
+      w,
+      h,
+      axis,
+      length,
+      thick,
+      mx: dirX > 0 ? x : x + w,
+      mz: z + h / 2,
+      dx: dirX * length,
+      dz: 0,
+      inX,
+      inZ,
+      innerAt: inZ > 0 ? z + h : z,
+    };
+  }
+  return {
+    x,
+    z,
+    w,
+    h,
+    axis,
+    length,
+    thick,
+    mx: x + w / 2,
+    mz: dirZ > 0 ? z : z + h,
+    dx: 0,
+    dz: dirZ * length,
+    inX,
+    inZ,
+    innerAt: inX > 0 ? x + w : x,
+  };
+}
+
 export function straightJoins(segIdx, segCount) {
   if (segCount === 1) return { code: 2, label: "male / male" };
   if (segIdx === 0) return { code: 1, label: "male / female" };
@@ -103,6 +221,7 @@ export function layoutPieces(gw, gd, opts = {}) {
     const z = c.z + oz;
     const feat = corners[c.ci] ?? {};
     const joins = { code: 2, label: "female / female" };
+    const drawn = cornerDraw(c.ci, x, z, leg, W);
     pieces.push({
       id: `corner-${c.ci}`,
       kind: "corner",
@@ -113,31 +232,9 @@ export function layoutPieces(gw, gd, opts = {}) {
       joins: joins.label,
       joinCode: joins.code,
       feat,
-      x: c.hx > 0 ? x : x - leg,
-      z: c.hz > 0 ? z - W : z,
-      w: leg,
-      h: W,
+      ...drawn,
       rowZ: z,
       colX: x,
-      arm: "h",
-    });
-    pieces.push({
-      id: `corner-${c.ci}`,
-      kind: "corner",
-      cornerIdx: c.ci,
-      label: c.label,
-      length: leg,
-      lengthB: leg,
-      joins: joins.label,
-      joinCode: joins.code,
-      feat,
-      x: c.hx > 0 ? x - W : x,
-      z: c.hz > 0 ? z : z - leg,
-      w: W,
-      h: leg,
-      rowZ: z,
-      colX: x,
-      arm: "v",
     });
   }
 
@@ -170,19 +267,39 @@ export function layoutPieces(gw, gd, opts = {}) {
       if (side.si === 0) {
         const x = leg + acc + extra + ox;
         const z = 0 + oz;
-        pieces.push({ ...base, x, z: z - W, w: len, h: W, rowZ: z, colX: x });
+        pieces.push({
+          ...base,
+          ...straightDraw(0, x, z - W, len, W),
+          rowZ: z,
+          colX: x,
+        });
       } else if (side.si === 1) {
         const x = gw + ox;
         const z = leg + acc + extra + oz;
-        pieces.push({ ...base, x, z, w: W, h: len, rowZ: z, colX: x });
+        pieces.push({
+          ...base,
+          ...straightDraw(1, x, z, W, len),
+          rowZ: z,
+          colX: x,
+        });
       } else if (side.si === 2) {
         const x = gw - leg - acc - extra - len + ox;
         const z = gd + oz;
-        pieces.push({ ...base, x, z, w: len, h: W, rowZ: z, colX: x });
+        pieces.push({
+          ...base,
+          ...straightDraw(2, x, z, len, W),
+          rowZ: z,
+          colX: x,
+        });
       } else {
         const x = 0 + ox;
         const z = gd - leg - acc - extra - len + oz;
-        pieces.push({ ...base, x: x - W, z, w: W, h: len, rowZ: z, colX: x });
+        pieces.push({
+          ...base,
+          ...straightDraw(3, x - W, z, W, len),
+          rowZ: z,
+          colX: x,
+        });
       }
       acc += len;
     });
