@@ -8,7 +8,7 @@ import {
   sideOffset,
   sideSegments,
 } from "../web/src/blowoutLayout.js";
-import { featureShapes, worldBounds } from "../web/src/rimDraw.js";
+import { featureShapes, piecePath, worldBounds } from "../web/src/rimDraw.js";
 import {
   applyFeatureMode,
   bomLines,
@@ -108,6 +108,23 @@ const swFeat = featureShapes({
   feat: demo.corners[0],
   arms: swL.arms,
 });
-assert.ok(swFeat.some((s) => s.kind === "ingress" && s.w > 40), "SW ingress drawn on arm");
+const ingress = swFeat.find((s) => s.kind === "ingress");
+assert.ok(ingress && Math.max(ingress.w, ingress.h) > 40, "SW ingress drawn on arm");
+assert.ok(ingress.opens, "ingress opens the inner edge");
+assert.ok(ingress.x + ingress.w > swL.arms.a.innerAt, "U-break crosses inner rim");
+
+const holePiece = {
+  kind: "corner",
+  feat: demo.corners[1],
+  arms: cornerDraw(1, 900, 0, 200, 29.2).arms,
+};
+const hole = featureShapes(holePiece).find((s) => s.kind === "hole");
+assert.ok(hole, "cord hole");
+assert.ok(hole.cz > -29.2 && hole.cz < 0, "hole sits in south rim thickness");
+assert.ok(hole.cx > 700 && hole.cx < 900, "hole goes into the SE south arm");
+
+const d = piecePath({ ...swL, kind: "corner", feat: demo.corners[0] }, (z) => -z);
+assert.match(d, /^M /);
+assert.ok(d.includes("H ") || d.includes("L "), "path has outline + cut");
 
 console.log("ok  rim model + assembled/blowout + BOM checks passed");

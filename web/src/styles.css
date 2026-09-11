@@ -340,6 +340,7 @@ label.field.checkbox {
   stroke: #0b100e;
   stroke-width: 1.2;
   stroke-linejoin: round;
+  fill-rule: evenodd;
 }
 
 .blowout-svg-wrap .piece.straight {

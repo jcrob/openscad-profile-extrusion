@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { alignmentGuides, sideSegments } from "./blowoutLayout.js";
-import { featureShapes, lPath, worldBounds } from "./rimDraw.js";
+import { piecePath, worldBounds } from "./rimDraw.js";
 import {
   CORD_POS_OPTIONS,
   CORNER_ARM_HINT,
@@ -38,33 +38,6 @@ function ArmSelect({ value, onChange, cornerIdx }) {
       <option value="b">Arm B — {hint.b}</option>
     </select>
   );
-}
-
-function FeatureMarks({ piece, ty }) {
-  return featureShapes(piece).map((s, i) => {
-    if (s.kind === "hole") {
-      return (
-        <circle
-          key={`${s.kind}-${i}`}
-          className="feat-hole"
-          cx={s.cx}
-          cy={ty(s.cz)}
-          r={s.r}
-        />
-      );
-    }
-    return (
-      <rect
-        key={`${s.kind}-${i}`}
-        className={s.kind === "ingress" ? "feat-ingress" : "feat-under"}
-        x={s.x}
-        y={ty(s.z + s.h)}
-        width={s.w}
-        height={s.h}
-        rx={s.kind === "ingress" ? 3 : 1.5}
-      />
-    );
-  });
 }
 
 function FeatureEditor({ piece, onChange }) {
@@ -427,18 +400,7 @@ export default function RimBuilder({
                 .join(" ");
               return (
                 <g key={p.id} className="piece-hit" onClick={() => onSelect(p.id)}>
-                  {p.points ? (
-                    <path className={cls} d={lPath(p.points, ty)} />
-                  ) : (
-                    <rect
-                      className={cls}
-                      x={p.x}
-                      y={ty(p.z + p.h)}
-                      width={p.w}
-                      height={p.h}
-                    />
-                  )}
-                  <FeatureMarks piece={p} ty={ty} />
+                  <path className={cls} fillRule="evenodd" d={piecePath(p, ty)} />
                 </g>
               );
             })}
