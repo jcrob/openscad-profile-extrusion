@@ -1,27 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import BlowoutPreview from "./BlowoutPreview.jsx";
-
-const emptyEdge = () => ({
-  kind: "edge",
-  qty: 1,
-  length: 120,
-  edge_join_ends: 0,
-  cornerpiecenum: 0,
-  cord_hole: false,
-  cord_hole_inner_d: 6,
-  cord_hole_pos: "middle",
-  cord_under: false,
-  cord_under_gap_len: 20,
-  lid_ingress: false,
-  ingress_depth: 30,
-  ingress_length: 40,
-  ingress_remove_right_rim: false,
-});
-
-const emptyCorner = () => ({
-  kind: "corner",
-  qty: 1,
-});
+import RimBuilder from "./RimBuilder.jsx";
+import {
+  bomCsv,
+  bomLines,
+  bomTotals,
+  buildLid,
+  demoFeatures,
+  emptyCorners,
+  emptyFeat,
+  emptySides,
+  rimScadSource,
+  syncSideFeats,
+  toPrintParts,
+} from "./rimModel.js";
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -48,188 +39,28 @@ async function api(path, opts = {}) {
   return data;
 }
 
-function Field({ label, children, checkbox }) {
-  return (
-    <label className={`field${checkbox ? " checkbox" : ""}`}>
-      {!checkbox && <span>{label}</span>}
-      {children}
-      {checkbox && <span>{label}</span>}
-    </label>
-  );
-}
-
-function EdgeEditor({ part, onChange, onRemove }) {
-  const set = (key, value) => onChange({ ...part, [key]: value });
-  return (
-    <div className="part-card">
-      <div className="head">
-        <span className="kind">Rim piece</span>
-        <button type="button" className="btn danger" onClick={onRemove}>
-          Remove
-        </button>
-      </div>
-      <div className="grid">
-        <Field label="Qty">
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={part.qty}
-            onChange={(e) => set("qty", Number(e.target.value))}
-          />
-        </Field>
-        <Field label="Length (mm)">
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={part.length}
-            onChange={(e) => set("length", Number(e.target.value))}
-          />
-        </Field>
-        <Field label="End joins">
-          <select
-            value={part.edge_join_ends ?? 0}
-            onChange={(e) => set("edge_join_ends", Number(e.target.value))}
-          >
-            <option value={0}>0 — none</option>
-            <option value={1}>1 — start male, finish female</option>
-            <option value={2}>2 — both male</option>
-            <option value={3}>3 — start female, finish male</option>
-            <option value={4}>4 — both female</option>
-          </select>
-        </Field>
-        <Field label="Corners on edge">
-          <select
-            value={part.cornerpiecenum ?? 0}
-            onChange={(e) => set("cornerpiecenum", Number(e.target.value))}
-          >
-            <option value={0}>0 — none</option>
-            <option value={1}>1 — start end</option>
-            <option value={2}>2 — both ends</option>
-            <option value={3}>3 — finish end</option>
-          </select>
-        </Field>
-        <Field label="Cord hole" checkbox>
-          <input
-            type="checkbox"
-            checked={part.cord_hole}
-            onChange={(e) => set("cord_hole", e.target.checked)}
-          />
-        </Field>
-        {part.cord_hole && (
-          <>
-            <Field label="Hole inner Ø (mm)">
-              <input
-                type="number"
-                min={1}
-                step={0.5}
-                value={part.cord_hole_inner_d}
-                onChange={(e) => set("cord_hole_inner_d", Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Hole position">
-              <select
-                value={part.cord_hole_pos}
-                onChange={(e) => set("cord_hole_pos", e.target.value)}
-              >
-                <option value="left">left</option>
-                <option value="middle">middle</option>
-                <option value="right">right</option>
-              </select>
-            </Field>
-          </>
-        )}
-        <Field label="Cord under" checkbox>
-          <input
-            type="checkbox"
-            checked={part.cord_under}
-            onChange={(e) => set("cord_under", e.target.checked)}
-          />
-        </Field>
-        {part.cord_under && (
-          <Field label="Under gap (mm)">
-            <input
-              type="number"
-              min={1}
-              value={part.cord_under_gap_len}
-              onChange={(e) => set("cord_under_gap_len", Number(e.target.value))}
-            />
-          </Field>
-        )}
-        <Field label="Lid ingress" checkbox>
-          <input
-            type="checkbox"
-            checked={part.lid_ingress}
-            onChange={(e) => set("lid_ingress", e.target.checked)}
-          />
-        </Field>
-        {part.lid_ingress && (
-          <>
-            <Field label="Ingress depth (mm)">
-              <input
-                type="number"
-                min={1}
-                value={part.ingress_depth}
-                onChange={(e) => set("ingress_depth", Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Ingress length (mm)">
-              <input
-                type="number"
-                min={1}
-                value={part.ingress_length}
-                onChange={(e) => set("ingress_length", Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Remove right rim" checkbox>
-              <input
-                type="checkbox"
-                checked={part.ingress_remove_right_rim}
-                onChange={(e) => set("ingress_remove_right_rim", e.target.checked)}
-              />
-            </Field>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CornerEditor({ part, onChange, onRemove }) {
-  return (
-    <div className="part-card">
-      <div className="head">
-        <span className="kind">Corner assembly</span>
-        <button type="button" className="btn danger" onClick={onRemove}>
-          Remove
-        </button>
-      </div>
-      <p style={{ color: "var(--muted)", margin: "0 0 0.75rem", fontSize: "0.85rem" }}>
-        Prints both pegged halves (fit preview off). One STL per assembly.
-      </p>
-      <div className="grid">
-        <Field label="Qty">
-          <input
-            type="number"
-            min={1}
-            max={16}
-            value={part.qty}
-            onChange={(e) => onChange({ ...part, qty: Number(e.target.value) })}
-          />
-        </Field>
-      </div>
-    </div>
-  );
+function downloadText(filename, text, mime = "text/plain") {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function App() {
-  const [name, setName] = useState("aquarium-lid-plate");
-  const [parts, setParts] = useState([emptyEdge()]);
+  const [name, setName] = useState("aquarium-lid");
+  const [gw, setGw] = useState(900);
+  const [gd, setGd] = useState(600);
+  const [layout, setLayout] = useState("blowout");
+  const [corners, setCorners] = useState(emptyCorners);
+  const [sides, setSides] = useState(() => syncSideFeats(900, 600, emptyCorners(), emptySides()));
+  const [selectedId, setSelectedId] = useState("corner-0");
   const [health, setHealth] = useState(null);
   const [printer, setPrinter] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [log, setLog] = useState("Ready.");
+  const [log, setLog] = useState("Ready. Build the rim, then generate a plate from the BOM.");
   const [job, setJob] = useState(null);
 
   useEffect(() => {
@@ -237,33 +68,53 @@ export default function App() {
     api("/api/printer").then(setPrinter).catch(() => {});
   }, []);
 
-  const bomPreview = useMemo(() => {
-    let edges = 0;
-    let corners = 0;
-    let stls = 0;
-    for (const p of parts) {
-      if (p.kind === "edge") {
-        edges += p.qty;
-        stls += p.qty;
-      } else {
-        corners += p.qty;
-        stls += p.qty;
-      }
-    }
-    return { edges, corners, stls };
-  }, [parts]);
-
-  const updatePart = (i, next) => {
-    setParts((prev) => prev.map((p, idx) => (idx === i ? next : p)));
+  const applyGlass = (nextGw, nextGd, nextCorners = corners) => {
+    setGw(nextGw);
+    setGd(nextGd);
+    setCorners(nextCorners);
+    setSides((prev) => syncSideFeats(nextGw, nextGd, nextCorners, prev));
   };
 
-  const removePart = (i) => {
-    setParts((prev) => prev.filter((_, idx) => idx !== i));
+  const lid = useMemo(
+    () => buildLid(gw, gd, corners, sides, layout),
+    [gw, gd, corners, sides, layout]
+  );
+  const lines = useMemo(() => bomLines(lid.pieces), [lid.pieces]);
+  const totals = useMemo(() => bomTotals(lines), [lines]);
+  const parts = useMemo(() => toPrintParts(lines), [lines]);
+
+  const onFeatChange = (piece, feat) => {
+    if (piece.kind === "corner") {
+      const next = corners.map((c, i) => (i === piece.cornerIdx ? feat : c));
+      setCorners(next);
+      setSides((prev) => syncSideFeats(gw, gd, next, prev));
+      return;
+    }
+    setSides((prev) =>
+      prev.map((row, si) =>
+        si === piece.sideIdx ? row.map((f, i) => (i === piece.segIdx ? feat : f)) : row
+      )
+    );
+  };
+
+  const loadDemo = () => {
+    const demo = demoFeatures();
+    applyGlass(demo.gw, demo.gd, demo.corners);
+    setSides(syncSideFeats(demo.gw, demo.gd, demo.corners, demo.sides));
+    setSelectedId("corner-0");
+    setLog("Loaded 900×600 featured demo (one option per corner and side).");
+  };
+
+  const clearFeatures = () => {
+    const next = emptyCorners();
+    setCorners(next);
+    setSides((prev) => prev.map((row) => row.map(() => emptyFeat())));
+    setLog("Cleared piece features. Segment lengths are unchanged.");
   };
 
   const generate = async () => {
     setBusy(true);
-    setLog("Submitting parts list…");
+    setLog("Submitting rim BOM…");
     setJob(null);
     try {
       const result = await api("/api/jobs", {
@@ -297,22 +148,35 @@ export default function App() {
     }
   };
 
+  const downloadScad = () => {
+    downloadText(
+      `${name || "aquarium-lid"}.scad`,
+      rimScadSource({ gw, gd, layout, corners, sides }),
+      "text/plain"
+    );
+    setLog("Downloaded OpenSCAD lid file. Include path must see rim_rectangular_lid.scad.");
+  };
+
+  const downloadBom = () => {
+    downloadText(`${name || "aquarium-lid"}-bom.csv`, bomCsv(lines), "text/csv");
+    setLog("Downloaded BOM CSV.");
+  };
+
   return (
     <div className="app">
       <header className="hero">
-        <h1>Aquarium lid → Bambu print</h1>
+        <h1>Aquarium lid builder</h1>
         <p>
-          Inspect the rectangular lid blowout (corners share the side gap on
-          aligned rows and columns), then build a parts list of edge replicas and
-          corner pieces to arrange, download, or send to a LAN Bambu printer.
+          Size the glass, drop features onto each rim piece, and read the
+          auto-generated bill of materials. Preview the frame assembled or
+          blown out, then download OpenSCAD or send straights to a LAN Bambu
+          printer.
         </p>
       </header>
 
-      <BlowoutPreview />
-
       <div className="status-bar">
         <span className={`pill ${health?.ok ? "ok" : ""}`}>
-          API {health?.ok ? "up" : "…"}
+          API {health?.ok ? "up" : "offline (preview still works)"}
         </span>
         <span className={`pill ${health?.orca ? "ok" : "warn"}`}>
           OrcaSlicer {health?.orca ? "found" : "missing (STL zip fallback)"}
@@ -322,59 +186,45 @@ export default function App() {
         </span>
       </div>
 
-      <section className="panel">
-        <h2>Job name</h2>
-        <div className="name-row">
-          <input value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-
-        <h2>Parts list</h2>
-        <div className="row-actions">
-          <button type="button" className="btn" onClick={() => setParts((p) => [...p, emptyEdge()])}>
-            Add edge
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setParts((p) => [...p, emptyCorner()])}
-          >
-            Add corner
-          </button>
-        </div>
-
-        {parts.map((part, i) =>
-          part.kind === "edge" ? (
-            <EdgeEditor
-              key={i}
-              part={part}
-              onChange={(next) => updatePart(i, next)}
-              onRemove={() => removePart(i)}
-            />
-          ) : (
-            <CornerEditor
-              key={i}
-              part={part}
-              onChange={(next) => updatePart(i, next)}
-              onRemove={() => removePart(i)}
-            />
-          )
-        )}
-      </section>
+      <RimBuilder
+        gw={gw}
+        gd={gd}
+        layout={layout}
+        corners={corners}
+        sides={sides}
+        selectedId={selectedId}
+        onGw={(v) => applyGlass(v, gd)}
+        onGd={(v) => applyGlass(gw, v)}
+        onLayout={setLayout}
+        onSelect={setSelectedId}
+        onFeatChange={onFeatChange}
+        onLoadDemo={loadDemo}
+        onClearFeatures={clearFeatures}
+      />
 
       <section className="panel">
-        <h2>BOM preview</h2>
+        <h2>Bill of materials</h2>
+        <p className="blowout-copy">
+          Pieces come from the glass size and corner-leg plan. Identical
+          straights collapse to one line with quantity. Ingress on a corner can
+          lengthen every corner leg.
+        </p>
         <div className="bom">
           <div className="stat">
-            <div className="n">{bomPreview.edges}</div>
-            <div className="l">Edge pieces</div>
-          </div>
-          <div className="stat">
-            <div className="n">{bomPreview.corners}</div>
+            <div className="n">{totals.corners}</div>
             <div className="l">Corner assemblies</div>
           </div>
           <div className="stat">
-            <div className="n">{bomPreview.stls}</div>
-            <div className="l">STL files</div>
+            <div className="n">{totals.straights}</div>
+            <div className="l">Straight pieces</div>
+          </div>
+          <div className="stat">
+            <div className="n">{totals.featured}</div>
+            <div className="l">Featured pieces</div>
+          </div>
+          <div className="stat">
+            <div className="n">{totals.pieces}</div>
+            <div className="l">Print items</div>
           </div>
           {job?.bom && (
             <div className="stat">
@@ -384,8 +234,61 @@ export default function App() {
           )}
         </div>
 
+        {lines.length === 0 ? (
+          <p className="feature-empty">No pieces — increase the glass span.</p>
+        ) : (
+          <div className="bom-table-wrap">
+            <table className="bom-table">
+              <thead>
+                <tr>
+                  <th>Piece</th>
+                  <th>Type</th>
+                  <th>Qty</th>
+                  <th>Length</th>
+                  <th>End joins</th>
+                  <th>Features</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((row) => (
+                  <tr key={row.key}>
+                    <td>{row.piece}</td>
+                    <td>{row.name}</td>
+                    <td>{row.qty}</td>
+                    <td>
+                      {row.kind === "corner"
+                        ? `${row.length.toFixed(0)} × ${row.lengthB.toFixed(0)} mm`
+                        : `${row.length.toFixed(0)} mm`}
+                    </td>
+                    <td>{row.joins}</td>
+                    <td>{row.features}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="name-row" style={{ marginTop: "1rem" }}>
+          <label className="field">
+            <span>Job name</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+        </div>
+
         <div className="actions-footer">
-          <button type="button" className="btn primary" disabled={busy || !parts.length} onClick={generate}>
+          <button type="button" className="btn" onClick={downloadBom} disabled={!lines.length}>
+            Download BOM CSV
+          </button>
+          <button type="button" className="btn" onClick={downloadScad} disabled={!lines.length}>
+            Download OpenSCAD
+          </button>
+          <button
+            type="button"
+            className="btn primary"
+            disabled={busy || !parts.length}
+            onClick={generate}
+          >
             {busy ? "Working…" : "Generate & arrange"}
           </button>
           {job?.download_url && (
@@ -402,6 +305,10 @@ export default function App() {
             Send to printer
           </button>
         </div>
+        <p className="feature-hint">
+          OpenSCAD download includes corner-arm features. LAN print sends stock
+          corner assemblies plus featured straights from this BOM.
+        </p>
       </section>
 
       <section className="panel">

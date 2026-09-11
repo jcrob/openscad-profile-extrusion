@@ -4,8 +4,10 @@ Local LAN webapp: configure edge/corner aquarium-lid parts, generate STLs with O
 
 ## Features
 
-- **Parts list UI** — add edge replicas (length, stem grippers, cord hole/under, lid ingress) and corner assemblies
-- **BOM summary** — piece counts and plate-fill estimate (rejects oversized jobs when slicing)
+- **Rim builder** — glass width/depth, per-piece feature dropdowns (cord hole, cord under, lid ingress), assembled or blowout preview
+- **Auto BOM** — corner L pieces and chained straights with lengths, joins, features, CSV download
+- **OpenSCAD export** — generated lid file with the same feature vectors as `rim_rectangular_lid.scad`
+- **Print job** — arrange featured straights plus stock corners (Orca / Bambu LAN when available)
 - **OpenSCAD export** — uses unified `rim_piece_assembly.scad` (edge + corner modules; `show_edge_fit_preview` off for standalone corner print)
 - **OrcaSlicer** — locked machine / process / filament under `print-profiles/`
 - **Bambu LAN** — FTPS upload + MQTT `project_file` (IP + access code + serial)
@@ -28,7 +30,7 @@ Local LAN webapp: configure edge/corner aquarium-lid parts, generate STLs with O
 ```bash
 # UI
 cd web && npm install && npm run dev
-# http://127.0.0.1:43123 — lid blowout preview + print parts list
+# http://127.0.0.1:43123 — rim builder (features, BOM, assembled / blowout)
 
 # API (optional, for generate/print)
 python3 -m venv .venv
@@ -175,6 +177,7 @@ Blowout keeps NW at `(−gap, +gap)`. Far +X is `gap × (south/north segments + 
 
 ```bash
 python3 scripts/test_blowout_offsets.py
+node scripts/test_rim_model.mjs
 ```
 
 ## API
@@ -219,4 +222,4 @@ Example body:
 - Multi-printer farm / Hub API
 - AMS multi-color mapping
 - Public internet hosting
-- Editing corner Customizer geometry in the UI (stock corners + qty only)
+- Editing stock corner Customizer geometry beyond arm features (LAN print still uses stock corner assemblies)
