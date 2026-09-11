@@ -258,3 +258,114 @@ label.field.checkbox {
   color: var(--text);
   padding: 0.55rem 0.7rem;
 }
+
+.blowout-copy {
+  color: var(--muted);
+  margin: 0 0 1rem;
+  line-height: 1.45;
+  max-width: 46rem;
+}
+
+.blowout-controls {
+  margin-bottom: 1rem;
+  align-items: end;
+}
+
+.blowout-stat {
+  background: var(--bg1);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+}
+
+.blowout-svg-wrap {
+  background: #0b100e;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.blowout-svg-wrap svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 280px;
+  max-height: 520px;
+}
+
+.blowout-svg-wrap .glass {
+  fill: rgba(61, 186, 122, 0.08);
+  stroke: #2a7a52;
+  stroke-width: 2;
+  stroke-dasharray: 10 6;
+}
+
+.blowout-svg-wrap .glass-label {
+  fill: var(--muted);
+  font-size: 18px;
+  text-anchor: middle;
+}
+
+.blowout-svg-wrap .guide {
+  stroke-width: 2;
+  stroke-dasharray: 8 6;
+  opacity: 0.85;
+}
+
+.blowout-svg-wrap .guide.south {
+  stroke: #e0a24a;
+}
+
+.blowout-svg-wrap .guide.north {
+  stroke: #6cb6ff;
+}
+
+.blowout-svg-wrap .guide.east {
+  stroke: #3dba7a;
+}
+
+.blowout-svg-wrap .guide.west {
+  stroke: #c9a227;
+}
+
+.blowout-svg-wrap .guide-label {
+  fill: #c9d6cf;
+  font-size: 14px;
+}
+
+.blowout-svg-wrap .piece {
+  stroke: #0b100e;
+  stroke-width: 1;
+}
+
+.blowout-svg-wrap .piece.straight {
+  fill: #3dba7a;
+}
+
+.blowout-svg-wrap .piece.corner {
+  fill: #e0a24a;
+}
+
+.align-note {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  margin: 0.85rem 0 0;
+}
+
+.align-note.ok {
+  color: var(--accent);
+}
+
+.align-note.bad {
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .app {
+    padding: 1.25rem 0.9rem 3rem;
+  }
+
+  .blowout-svg-wrap svg {
+    min-height: 220px;
+  }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import BlowoutPreview from "./BlowoutPreview.jsx";
 
 const emptyEdge = () => ({
   kind: "edge",
@@ -301,11 +302,13 @@ export default function App() {
       <header className="hero">
         <h1>Aquarium lid → Bambu print</h1>
         <p>
-          Build a parts list of edge replicas and corner pieces, auto-arrange on a
-          P1S plate with locked print settings, then download or send to your LAN
-          printer.
+          Inspect the rectangular lid blowout (corners share the side gap on
+          aligned rows and columns), then build a parts list of edge replicas and
+          corner pieces to arrange, download, or send to a LAN Bambu printer.
         </p>
       </header>
+
+      <BlowoutPreview />
 
       <div className="status-bar">
         <span className={`pill ${health?.ok ? "ok" : ""}`}>

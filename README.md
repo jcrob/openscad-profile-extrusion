@@ -26,13 +26,14 @@ Local LAN webapp: configure edge/corner aquarium-lid parts, generate STLs with O
 ### Linux / macOS
 
 ```bash
-# API deps
+# UI
+cd web && npm install && npm run dev
+# http://127.0.0.1:43123 — lid blowout preview + print parts list
+
+# API (optional, for generate/print)
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r server/requirements.txt
-
-# UI
-cd web && npm install && npm run build && cd ..
 
 # Env for printer (optional)
 cp .env.example .env
@@ -146,7 +147,34 @@ web/              Vite + React UI
 scad/             Symlinks to OpenSCAD sources
 print-profiles/   Locked Bambu/Orca JSON
 rim_piece_assembly.scad   unified edge + corner geometry
+rim_rectangular_lid.scad  glass-size → assembled / blowout / plate frame
 edgereplica.scad / cornerpiece.scad / profile_extrusion.scad  thin entrypoints
+```
+
+## Rectangular lid (OpenSCAD)
+
+`rim_rectangular_lid.scad` builds a four-sided rim from the **max glass-channel span** (the pane) as `glass_width` × `glass_depth`. Placement already offsets by profile width. Each side splits into ≤200 mm pieces plus L-corners.
+
+Ingress **opening** is the clear pass-through you type. The U bay length is `opening + pad`, where pad is `2 × edge_profile_max_x` (~60 mm) unless you set `rim_ingress_opening_offset`.
+
+```openscad
+include <rim_rectangular_lid.scad>
+rim_rectangular_lid();                    // assembled preview
+rim_rectangular_lid(layout = "blowout");  // exploded XZ inspection
+rim_rectangular_lid(layout = "plate");    // 250×250 mm pack
+```
+
+Feature-rich demo (one option per corner/side):
+
+```bash
+openscad rim_rect_demo.scad
+# Customizer: channel_width / channel_depth, ingress_opening, demo_layout
+```
+
+Blowout keeps NW at `(−gap, +gap)`. Far +X is `gap × (south/north segments + 1)` and far −Z is `gap × (east/west segments + 1)`. Each side copies its clockwise-start corner so rows and columns stay aligned. Override the base `gap` with `rim_blowout_gap` (0 = auto: `2×rim_layout_gap` + profile width).
+
+```bash
+python3 scripts/test_blowout_offsets.py
 ```
 
 ## API

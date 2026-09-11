@@ -1,5 +1,7 @@
-// Rectangular aquarium lid — rim frame from glass size + modular pieces.
+// Rectangular aquarium lid — rim frame from max glass-channel span + modular pieces.
 // Uses rim_piece_assembly / rim_corner_assembly (max 200 mm per straight).
+// glass_width / glass_depth are the pane (channel) span; placement offsets by
+// profile width. Ingress feature values are clear openings; bay adds ~60 mm.
 // Corner arms default from glass size (≤400 mm side → side/2, else 200 mm);
 // straight runs maximize 200 mm pieces with one remainder segment.
 //
@@ -15,8 +17,8 @@
 //   [2] cord_hole_pos      "left"|"middle"|"right"
 //   [3] cord_under         bool
 //   [4] cord_under_gap_len mm
-//   [5] lid_ingress        bool  (ingress_length > 0)
-//   [6] ingress_length     mm (0 = off)
+//   [5] lid_ingress        bool  (opening length > 0)
+//   [6] ingress opening    mm (0 = off); bay length = opening + pad (~60 / 2×profile)
 //   [7] ingress_depth      mm
 //   [8] ingress_on         "a"|"b"  (corners only)
 //   [9] cord_hole_on       "a"|"b"  (corners only)
@@ -35,14 +37,17 @@ RIM_FEAT_NONE = [
 ];
 
 /* [Glass / frame] */
-glass_width       = 600;   // inner opening along +X (mm)
-glass_depth       = 450;   // inner opening along +Z (mm)
+// Max glass-channel span (the pane). Placement offsets by profile width.
+glass_width       = 600;   // max channel width along +X (mm)
+glass_depth       = 450;   // max channel depth along +Z (mm)
 // glass_thickness is defined in rim_piece_assembly.scad (Customizer there or -D)
 
 /* [Build limits] */
 rim_max_piece_len = 200;   // max straight length (mm)
 rim_corner_leg    = 0;     // 0 = auto from glass size (see rim_rect_effective_corner_leg)
 rim_corner_split  = 400;   // side ≤ this → corner = side/2; else corner = rim_max_piece_len
+// 0 = auto 2×profile (~60 mm). Added to user ingress opening → visible U bay.
+rim_ingress_opening_offset = 0;
 
 /* [Layout] */
 rim_layout        = "assembled"; // "assembled" | "blowout" | "plate"
@@ -70,13 +75,21 @@ side_features_w = [];
 // Feature helpers
 // ---------------------------------------------------------------------------
 
+// User ingress opening → visible U bay (opening + ~60 mm = 2×profile).
+function rim_ingress_opening_pad() =
+    rim_ingress_opening_offset > 0 ? rim_ingress_opening_offset : 2 * edge_profile_max_x;
+
+function rim_ingress_bay_from_opening(opening) =
+    opening > 0 ? opening + rim_ingress_opening_pad() : 0;
+
 function rim_feat_cord(f)        = f[0];
 function rim_feat_cord_d(f)      = f[1];
 function rim_feat_cord_pos(f)    = f[2];
 function rim_feat_under(f)       = f[3];
 function rim_feat_under_gap(f)   = f[4];
 function rim_feat_ingress(f)     = f[5] && f[6] > 0;
-function rim_feat_ingress_len(f) = f[6];
+function rim_feat_ingress_opening(f) = f[6];
+function rim_feat_ingress_len(f) = rim_ingress_bay_from_opening(f[6]);
 function rim_feat_ingress_dep(f) = f[7];
 function rim_feat_ingress_on(f)  = f[8];
 function rim_feat_cord_on(f)     = f[9];
@@ -217,26 +230,36 @@ function rim_rect_blowout_gap_size(gap = rim_layout_gap * 2) =
 // Extra run offset per segment: gap after corner, then between each chained piece.
 function rim_rect_blowout_along_extra(seg_idx, gap) = (seg_idx + 1) * gap;
 
-// Corner blowout: base outward clearance + extra along axis where a multi-seg side ends.
-function rim_rect_blowout_corner_offset(ci, gap, gw, gd, corners = corner_features) =
-    let (
-        ns = len(rim_rect_side_seg_lens(0, gw, gd, rim_max_piece_len, corners)),
-        ne = len(rim_rect_side_seg_lens(1, gw, gd, rim_max_piece_len, corners)),
-        nn = len(rim_rect_side_seg_lens(2, gw, gd, rim_max_piece_len, corners)),
-        nw = len(rim_rect_side_seg_lens(3, gw, gd, rim_max_piece_len, corners)),
-        base = gap + edge_profile_max_x
-    )
-    // SW ends west chain / starts south; SE ends south / starts east; etc.
-    ci == 0 ? [-base - nw * gap, 0, -base] :
-    ci == 1 ? [ base + ns * gap, 0, -base] :
-    ci == 2 ? [ base + ne * gap, 0,  base] :
-              [-base - nn * gap, 0,  base];
+// Far-axis explode: gap × (segment count + 1). si 0 = X-run (S/N), si 1 = Z-run (E/W).
+function rim_rect_blowout_side_gap(si, gap, gw, gd, corners = corner_features) =
+    gap * (len(rim_rect_side_seg_lens(si, gw, gd, rim_max_piece_len, corners)) + 1);
 
-function rim_rect_blowout_side_offset(si, gap) =
-    si == 0 ? [0, 0, -gap] :
-    si == 1 ? [ gap, 0, 0] :
-    si == 2 ? [0, 0,  gap] :
-              [-gap, 0, 0];
+// [gx, gz] — far +X and far −Z from the fixed NW corner.
+function rim_rect_blowout_axis_gaps(gap, gw, gd, corners = corner_features) =
+    [
+        rim_rect_blowout_side_gap(0, gap, gw, gd, corners),
+        rim_rect_blowout_side_gap(1, gap, gw, gd, corners)
+    ];
+
+// NW stays at (−gap, +gap). Other corners: gx along X (south segs), gz along Z (east segs).
+// Each side copies its clockwise-start corner (S←SW, E←SE, N←NE, W←NW).
+function rim_rect_blowout_corner_offset(ci, gap, gw = glass_width, gd = glass_depth,
+    corners = corner_features
+) =
+    let (ax = rim_rect_blowout_axis_gaps(gap, gw, gd, corners), gx = ax[0], gz = ax[1])
+    ci == 0 ? [-gap, 0, -gz] :
+    ci == 1 ? [ gx,  0, -gz] :
+    ci == 2 ? [ gx,  0,  gap] :
+              [-gap, 0,  gap];
+
+function rim_rect_blowout_side_offset(si, gap, gw = glass_width, gd = glass_depth,
+    corners = corner_features
+) =
+    let (ax = rim_rect_blowout_axis_gaps(gap, gw, gd, corners), gx = ax[0], gz = ax[1])
+    si == 0 ? [-gap, 0, -gz] :
+    si == 1 ? [ gx,  0, -gz] :
+    si == 2 ? [ gx,  0,  gap] :
+              [-gap, 0,  gap];
 
 module rim_rect_place_corner(ci, leg = undef, feat = undef,
     gw = glass_width, gd = glass_depth, corners = corner_features,
@@ -336,7 +359,7 @@ module rim_rect_print_flat() {
 function rim_rect_straight_footprint(len) = [len, edge_overall_height + 2];
 function rim_rect_corner_footprint(leg) = [2 * leg + edge_profile_max_x, edge_overall_height + 2];
 
-// Build a feature row (see header for field order).
+// Build a feature row (see header). ingress_len is the opening; bay adds pad.
 function rim_feat(
     cord_hole = false, cord_d = 6, cord_pos = "middle",
     cord_under = false, under_gap = 20,
@@ -424,7 +447,7 @@ module rim_rect_lid_blowout(gw = glass_width, gd = glass_depth,
                     si, i, segs[i],
                     gw = gw, gd = gd, leg = leg,
                     side_feat_lists = side_feat_lists, corners = corners,
-                    offset = rim_rect_blowout_side_offset(si, gap_eff),
+                    offset = rim_rect_blowout_side_offset(si, gap_eff, gw, gd, corners),
                     chain_gap = gap_eff
                 );
     }
