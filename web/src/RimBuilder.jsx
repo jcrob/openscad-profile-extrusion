@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { alignmentGuides, sideSegments } from "./blowoutLayout.js";
-import { piecePath, worldBounds } from "./rimDraw.js";
+import { cordBossPath, ingressUPath, piecePath, worldBounds } from "./rimDraw.js";
 import {
   CORD_POS_OPTIONS,
   CORNER_ARM_HINT,
@@ -401,6 +401,12 @@ export default function RimBuilder({
               return (
                 <g key={p.id} className="piece-hit" onClick={() => onSelect(p.id)}>
                   <path className={cls} fillRule="evenodd" d={piecePath(p, ty)} />
+                  {ingressUPath(p, ty) && (
+                    <path className={cls} d={ingressUPath(p, ty)} />
+                  )}
+                  {cordBossPath(p, ty) && (
+                    <path className={`${cls} cord-boss`} fillRule="evenodd" d={cordBossPath(p, ty)} />
+                  )}
                 </g>
               );
             })}

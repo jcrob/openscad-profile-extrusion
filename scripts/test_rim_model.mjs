@@ -110,8 +110,8 @@ const swFeat = featureShapes({
 });
 const ingress = swFeat.find((s) => s.kind === "ingress");
 assert.ok(ingress && Math.max(ingress.w, ingress.h) > 40, "SW ingress drawn on arm");
-assert.ok(ingress.opens, "ingress opens the inner edge");
-assert.ok(ingress.x + ingress.w > swL.arms.a.innerAt, "U-break crosses inner rim");
+assert.ok(ingress.fullWidth, "ingress removes the full rim width");
+assert.ok(swFeat.some((s) => s.kind === "ingress-back"), "ingress U back in the glass");
 
 const holePiece = {
   kind: "corner",
@@ -120,8 +120,9 @@ const holePiece = {
 };
 const hole = featureShapes(holePiece).find((s) => s.kind === "hole");
 assert.ok(hole, "cord hole");
-assert.ok(hole.cz > -29.2 && hole.cz < 0, "hole sits in south rim thickness");
-assert.ok(hole.cx > 700 && hole.cx < 900, "hole goes into the SE south arm");
+assert.ok(hole.outer_r > hole.inner_r, "outer diameter around the bore");
+assert.ok(hole.cz > -2 && hole.cz < 12, "outer Ø connects at the inner rim edge");
+assert.ok(hole.cx > 700 && hole.cx < 900, "hole along the SE south arm");
 
 const d = piecePath({ ...swL, kind: "corner", feat: demo.corners[0] }, (z) => -z);
 assert.match(d, /^M /);

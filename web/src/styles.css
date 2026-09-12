@@ -351,6 +351,11 @@ label.field.checkbox {
   fill: #e0a24a;
 }
 
+.blowout-svg-wrap .cord-boss {
+  stroke: #0b100e;
+  stroke-width: 1;
+}
+
 .align-note {
   font-family: var(--mono);
   font-size: 0.85rem;
