@@ -8,7 +8,7 @@ import {
   sideOffset,
   sideSegments,
 } from "../web/src/blowoutLayout.js";
-import { featureShapes, piecePath, worldBounds } from "../web/src/rimDraw.js";
+import { featureShapes, outlinePoints, piecePath, worldBounds } from "../web/src/rimDraw.js";
 import {
   applyFeatureMode,
   bomLines,
@@ -109,9 +109,10 @@ const swFeat = featureShapes({
   arms: swL.arms,
 });
 const ingress = swFeat.find((s) => s.kind === "ingress");
-assert.ok(ingress && Math.max(ingress.w, ingress.h) > 40, "SW ingress drawn on arm");
-assert.ok(ingress.fullWidth, "ingress removes the full rim width");
-assert.ok(swFeat.some((s) => s.kind === "ingress-back"), "ingress U back in the glass");
+assert.ok(ingress && ingress.hollow && ingress.bay > 40, "SW hollow ingress U");
+assert.ok(ingress.farL[0] > ingress.left[0], "U opens into the glass");
+const swOutline = outlinePoints({ ...swL, kind: "corner", feat: demo.corners[0] });
+assert.ok(swOutline.length > 6, "L outline detours through the U");
 
 const holePiece = {
   kind: "corner",

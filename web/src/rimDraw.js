@@ -1,11 +1,10 @@
-// Top-down SVG matching 3D rim_piece_assembly features.
-// Cord hole: outer boss at the flange tip (inner edge), inner bore punched.
-// Ingress: full-width bay (no leftover rim) + U arms/back into the glass.
+// Top-down plan matching rim_piece_assembly:
+// - Ingress: hollow U from the inner edge into the glass (no rim in the opening).
+// - Cord hole: outer-Ø boss fused to the inner flange edge, inner bore open.
 
 import { featHasIngress, ingressBay } from "./rimModel.js";
 
 const CORD_FUSE = 2;
-const EDGE_OVERLAP = 2.5;
 
 export function worldBounds(pieces, gw, gd, pad = 40) {
   let minX = 0;
@@ -18,22 +17,12 @@ export function worldBounds(pieces, gw, gd, pad = 40) {
     if (x > maxX) maxX = x;
     if (z > maxZ) maxZ = z;
   };
-  const growBox = (x, z, w, h) => {
-    grow(x, z);
-    grow(x + w, z + h);
-  };
   for (const p of pieces) {
-    if (p.points) {
-      for (const [x, z] of p.points) grow(x, z);
-    } else {
-      growBox(p.x, p.z, p.w, p.h);
-    }
+    for (const [x, z] of outlinePoints(p)) grow(x, z);
     for (const s of featureShapes(p)) {
       if (s.kind === "hole") {
         grow(s.cx - s.outer_r, s.cz - s.outer_r);
         grow(s.cx + s.outer_r, s.cz + s.outer_r);
-      } else if (s.x != null) {
-        growBox(s.x, s.z, s.w, s.h);
       }
     }
   }
@@ -64,11 +53,6 @@ export function lPath(points, ty) {
   );
 }
 
-export function rectPath(x, z, w, h, ty) {
-  const y = ty(z + h);
-  return `M ${x} ${y} H ${x + w} V ${y + h} H ${x} Z`;
-}
-
 export function circlePath(cx, cz, r, ty) {
   const cy = ty(cz);
   return `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
@@ -84,7 +68,6 @@ function alongCenter(arm, t) {
   return [arm.mx + arm.dx * t, arm.mz + arm.dz * t];
 }
 
-/** Point on the inner (glass-facing) edge at parameter t. */
 export function alongInner(arm, t) {
   const [cx, cz] = alongCenter(arm, t);
   const half = arm.thick / 2;
@@ -96,19 +79,15 @@ function pickArm(piece, on) {
   return piece.arms?.a;
 }
 
-export function cordOuterD(inner_d) {
-  return inner_d + inner_d / 3;
-}
-
 export function cordOuterR(inner_d) {
-  return cordOuterD(inner_d) / 2;
+  return (inner_d + inner_d / 3) / 2;
 }
 
-/** 3D: center at flange_tip + fuse - outer_r, so the outer Ø meets the inner edge. */
+/** Outer Ø sits on the inner flange tip (3D: x0 = fuse - outer_r). */
 export function cordHoleCenter(arm, t, inner_d) {
   const [ix, iz] = alongInner(arm, t);
   const outer_r = cordOuterR(inner_d);
-  const shift = outer_r - CORD_FUSE; // toward glass from the inner edge
+  const shift = outer_r - CORD_FUSE;
   return {
     cx: ix + arm.inX * shift,
     cz: iz + arm.inZ * shift,
@@ -117,133 +96,120 @@ export function cordHoleCenter(arm, t, inner_d) {
   };
 }
 
-/** Full-width bay: cut through the whole profile so no rim remains in the opening. */
-function fullWidthBay(arm, width, t) {
-  const half = Math.min(width, arm.length * 0.92) / 2;
-  const [cx, cz] = alongCenter(arm, t);
-  const cut = arm.thick + 2 * EDGE_OVERLAP;
-  if (arm.axis === "x") {
-    const z0 = Math.min(arm.z, arm.innerAt) - EDGE_OVERLAP;
-    return { x: cx - half, z: z0, w: half * 2, h: cut };
-  }
-  const x0 = Math.min(arm.x, arm.innerAt) - EDGE_OVERLAP;
-  return { x: x0, z: cz - half, w: cut, h: half * 2 };
-}
-
-function ingressUBoxes(arm, bay, depth) {
-  const wall = arm.thick;
-  const half = Math.min(bay, arm.length * 0.92) / 2;
+/** Hollow U: from inner edge into the glass. Opening = bay, depth = ingress_depth. */
+export function ingressUDetour(arm, bay, depth) {
+  const half = Math.min(bay, arm.length * 0.9) / 2;
   const [ix, iz] = alongInner(arm, 0.5);
-  const inX = arm.inX;
-  const inZ = arm.inZ;
-  const alongX = arm.axis === "x" ? (arm.dx >= 0 ? 1 : -1) : 0;
-  const alongZ = arm.axis === "z" ? (arm.dz >= 0 ? 1 : -1) : 0;
-  // Left/right in the along direction from the bay center on the inner edge.
-  const leftX = ix - alongX * half;
-  const leftZ = iz - alongZ * half;
-  const boxes = [];
-  // Two arms into the glass, each one profile wide, length = ingress depth.
-  if (arm.axis === "x") {
-    const xL = Math.min(leftX, leftX + alongX * wall);
-    const xR = Math.min(leftX + alongX * (2 * half - wall), leftX + alongX * 2 * half);
-    const z0 = Math.min(iz, iz + inZ * depth);
-    boxes.push({ kind: "ingress-arm", x: xL, z: z0, w: wall, h: Math.abs(inZ * depth) || depth });
-    boxes.push({ kind: "ingress-arm", x: xR, z: z0, w: wall, h: Math.abs(inZ * depth) || depth });
-    const zb = Math.min(iz + inZ * (depth - wall), iz + inZ * depth);
-    boxes.push({ kind: "ingress-back", x: Math.min(leftX, leftX + alongX * 2 * half), z: zb, w: 2 * half, h: wall });
-  } else {
-    const zL = Math.min(leftZ, leftZ + alongZ * wall);
-    const zR = Math.min(leftZ + alongZ * (2 * half - wall), leftZ + alongZ * 2 * half);
-    const x0 = Math.min(ix, ix + inX * depth);
-    boxes.push({ kind: "ingress-arm", x: x0, z: zL, w: Math.abs(inX * depth) || depth, h: wall });
-    boxes.push({ kind: "ingress-arm", x: x0, z: zR, w: Math.abs(inX * depth) || depth, h: wall });
-    const xb = Math.min(ix + inX * (depth - wall), ix + inX * depth);
-    boxes.push({ kind: "ingress-back", x: xb, z: Math.min(leftZ, leftZ + alongZ * 2 * half), w: wall, h: 2 * half });
-  }
-  return boxes;
+  const ax = arm.axis === "x" ? (arm.dx >= 0 ? 1 : -1) : 0;
+  const az = arm.axis === "z" ? (arm.dz >= 0 ? 1 : -1) : 0;
+  const left = [ix - ax * half, iz - az * half];
+  const right = [ix + ax * half, iz + az * half];
+  const farL = [left[0] + arm.inX * depth, left[1] + arm.inZ * depth];
+  const farR = [right[0] + arm.inX * depth, right[1] + arm.inZ * depth];
+  return { left, farL, farR, right, depth, bay: half * 2 };
 }
 
-function innerNotch(arm, width, depth, t, overlap) {
-  const half = Math.min(width, arm.length * 0.9) / 2;
-  const cut = Math.min(depth, arm.thick - 1);
-  const [cx, cz] = alongCenter(arm, t);
-  if (arm.axis === "x") {
-    if (arm.inZ > 0) return { x: cx - half, z: arm.innerAt - cut + overlap, w: half * 2, h: cut };
-    return { x: cx - half, z: arm.innerAt - overlap, w: half * 2, h: cut };
+function detourOnInner(points, arm, u, eps = 0.8) {
+  if (!u) return points;
+  const out = [];
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    out.push(a);
+    if (!isInnerEdge(a, b, arm, eps)) continue;
+    const ta = tAlongInner(arm, a);
+    const tb = tAlongInner(arm, b);
+    const t0 = Math.min(ta, tb);
+    const t1 = Math.max(ta, tb);
+    if (t0 > 0.55 || t1 < 0.45) continue;
+    const startToEnd = ta < tb;
+    const seq = startToEnd
+      ? [u.left, u.farL, u.farR, u.right]
+      : [u.right, u.farR, u.farL, u.left];
+    out.push(...seq);
   }
-  if (arm.inX > 0) return { x: arm.innerAt - cut + overlap, z: cz - half, w: cut, h: half * 2 };
-  return { x: arm.innerAt - overlap, z: cz - half, w: cut, h: half * 2 };
+  return out;
+}
+
+function isInnerEdge(a, b, arm, eps) {
+  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  if (arm.axis === "x") return Math.abs(mid[1] - arm.innerAt) < eps;
+  return Math.abs(mid[0] - arm.innerAt) < eps;
+}
+
+function tAlongInner(arm, p) {
+  const [ix, iz] = alongInner(arm, 0);
+  const [jx, jz] = alongInner(arm, 1);
+  const dx = jx - ix;
+  const dz = jz - iz;
+  const len2 = dx * dx + dz * dz || 1;
+  return ((p[0] - ix) * dx + (p[1] - iz) * dz) / len2;
+}
+
+export function outlinePoints(piece) {
+  let pts;
+  if (piece.points) pts = piece.points.map((p) => [...p]);
+  else {
+    const { x, z, w, h } = piece;
+    pts = [
+      [x, z],
+      [x + w, z],
+      [x + w, z + h],
+      [x, z + h],
+    ];
+  }
+  const f = piece.feat || {};
+  if (featHasIngress(f)) {
+    const arm = pickArm(piece, f.ingress_on || "a");
+    if (arm) {
+      const u = ingressUDetour(arm, ingressBay(f.ingress_opening), Math.max(16, f.ingress_depth || 30));
+      pts = detourOnInner(pts, arm, u);
+    }
+  }
+  return pts;
 }
 
 export function featureShapes(piece) {
   const f = piece.feat || {};
   const shapes = [];
-
   if (featHasIngress(f)) {
     const arm = pickArm(piece, f.ingress_on || "a");
     if (arm) {
-      const bay = ingressBay(f.ingress_opening);
-      const depth = Math.max(12, f.ingress_depth || 30);
-      const bayBox = fullWidthBay(arm, bay, 0.5);
-      shapes.push({ kind: "ingress", ...bayBox, opens: true, fullWidth: true });
-      shapes.push(...ingressUBoxes(arm, bay, depth));
-    }
-  }
-  if (f.cord_under) {
-    const arm = pickArm(piece, f.cord_under_on || "a");
-    if (arm) {
-      const gap = Math.max(6, f.cord_under_gap_len || 20);
-      shapes.push({
-        kind: "under",
-        ...innerNotch(arm, gap, arm.thick * 0.35, 0.5, EDGE_OVERLAP),
-        opens: true,
-      });
+      const u = ingressUDetour(arm, ingressBay(f.ingress_opening), Math.max(16, f.ingress_depth || 30));
+      shapes.push({ kind: "ingress", ...u, opens: true, hollow: true });
     }
   }
   if (f.cord_hole) {
     const arm = pickArm(piece, f.cord_hole_on || "a");
     if (arm) {
       const inner_d = f.cord_hole_inner_d || 6;
-      shapes.push({
-        kind: "hole",
-        ...cordHoleCenter(arm, posT(f.cord_hole_pos), inner_d),
-      });
+      shapes.push({ kind: "hole", ...cordHoleCenter(arm, posT(f.cord_hole_pos), inner_d) });
+    }
+  }
+  if (f.cord_under) {
+    const arm = pickArm(piece, f.cord_under_on || "a");
+    if (arm) {
+      shapes.push({ kind: "under", gap: f.cord_under_gap_len || 20, arm });
     }
   }
   return shapes;
 }
 
-/** Rim body: outline minus full-width ingress bay, cord-under, and inner bore. */
 export function piecePath(piece, ty) {
-  const outline = piece.points
-    ? lPath(piece.points, ty)
-    : rectPath(piece.x, piece.z, piece.w, piece.h, ty);
-  const cuts = [];
-  for (const s of featureShapes(piece)) {
-    if (s.kind === "ingress" || s.kind === "under") {
-      cuts.push(rectPath(s.x, s.z, s.w, s.h, ty));
-    } else if (s.kind === "hole") {
-      cuts.push(circlePath(s.cx, s.cz, s.inner_r, ty));
-    }
-  }
-  return [outline, ...cuts].join(" ");
+  const outline = lPath(outlinePoints(piece), ty);
+  const holes = featureShapes(piece)
+    .filter((s) => s.kind === "hole")
+    .map((s) => circlePath(s.cx, s.cz, s.inner_r, ty));
+  return [outline, ...holes].join(" ");
 }
 
-/** Ingress U (arms + back) drawn in the glass, same fill as the piece. */
-export function ingressUPath(piece, ty) {
-  const parts = featureShapes(piece)
-    .filter((s) => s.kind === "ingress-arm" || s.kind === "ingress-back")
-    .map((s) => rectPath(s.x, s.z, s.w, s.h, ty));
-  return parts.join(" ");
-}
-
-/** Outer-Ø boss minus inner bore, fused to the inner rim edge. */
 export function cordBossPath(piece, ty) {
-  const parts = [];
-  for (const s of featureShapes(piece)) {
-    if (s.kind !== "hole") continue;
-    parts.push(circlePath(s.cx, s.cz, s.outer_r, ty));
-    parts.push(circlePath(s.cx, s.cz, s.inner_r, ty));
-  }
-  return parts.join(" ");
+  return featureShapes(piece)
+    .filter((s) => s.kind === "hole")
+    .map((s) => `${circlePath(s.cx, s.cz, s.outer_r, ty)} ${circlePath(s.cx, s.cz, s.inner_r, ty)}`)
+    .join(" ");
+}
+
+export function ingressUPath() {
+  return "";
 }
