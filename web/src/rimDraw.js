@@ -226,6 +226,8 @@ export function openingFills(piece) {
       out.push({ kind: "circle", cx: s.cx, cz: s.cz, r: s.inner_r });
     }
     if (s.kind === "ingress") {
+      const arm = pickArm(piece, piece.feat?.ingress_on || "a");
+      if (arm) out.push({ kind: "rect", ...rimBaySlot(arm, s.opening) });
       out.push({
         kind: "poly",
         points: [s.inner.left, s.inner.farL, s.inner.farR, s.inner.right],

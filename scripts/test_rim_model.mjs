@@ -151,9 +151,11 @@ assert.ok(
   swOpens.some((s) => s.kind === "poly" && s.points.length === 4),
   "ingress cavity is filled with background"
 );
+const swSlot = swOpens.find((s) => s.kind === "rect");
+assert.ok(swSlot, "main-length ingress gap is wrap background");
 assert.ok(
-  !swOpens.some((s) => s.kind === "rect"),
-  "inner cut keeps rim walls; no full-bar slot"
+  Math.min(swSlot.w, swSlot.h) < 50 && Math.max(swSlot.w, swSlot.h) > 20,
+  "slot is the clear opening through the bar, not the outer bay"
 );
 
 const sePiece = demoLid.pieces.find((p) => p.label === "SE");
