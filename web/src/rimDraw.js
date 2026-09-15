@@ -1,8 +1,8 @@
 // Top-down plan matching rim_piece_assembly:
-// - Ingress: hollow U from the inner edge into the glass (no rim in the opening).
+// - Ingress: rim U-walls around the inner cut; cavity is wrap background.
 // - Cord hole: outer-Ø boss fused to the inner flange edge, inner bore open.
 
-import { featHasIngress, ingressBay } from "./rimModel.js";
+import { featHasIngress } from "./rimModel.js";
 
 const CORD_FUSE = 2;
 
@@ -23,6 +23,11 @@ export function worldBounds(pieces, gw, gd, pad = 40) {
       if (s.kind === "hole") {
         grow(s.cx - s.outer_r, s.cz - s.outer_r);
         grow(s.cx + s.outer_r, s.cz + s.outer_r);
+      }
+      if (s.kind === "ingress") {
+        for (const pt of [s.outer.left, s.outer.farL, s.outer.farR, s.outer.right]) {
+          grow(pt[0], pt[1]);
+        }
       }
     }
   }
@@ -96,77 +101,61 @@ export function cordHoleCenter(arm, t, inner_d) {
   };
 }
 
-/** Hollow U: from inner edge into the glass. Opening = bay, depth = ingress_depth. */
-export function ingressUDetour(arm, bay, depth) {
-  const half = Math.min(bay, arm.length * 0.9) / 2;
+function armAlong(arm) {
+  return {
+    ax: arm.axis === "x" ? (arm.dx >= 0 ? 1 : -1) : 0,
+    az: arm.axis === "z" ? (arm.dz >= 0 ? 1 : -1) : 0,
+  };
+}
+
+function uCorners(arm, half, depth) {
   const [ix, iz] = alongInner(arm, 0.5);
-  const ax = arm.axis === "x" ? (arm.dx >= 0 ? 1 : -1) : 0;
-  const az = arm.axis === "z" ? (arm.dz >= 0 ? 1 : -1) : 0;
+  const { ax, az } = armAlong(arm);
   const left = [ix - ax * half, iz - az * half];
   const right = [ix + ax * half, iz + az * half];
-  const farL = [left[0] + arm.inX * depth, left[1] + arm.inZ * depth];
-  const farR = [right[0] + arm.inX * depth, right[1] + arm.inZ * depth];
-  return { left, farL, farR, right, depth, bay: half * 2 };
+  return {
+    left,
+    farL: [left[0] + arm.inX * depth, left[1] + arm.inZ * depth],
+    farR: [right[0] + arm.inX * depth, right[1] + arm.inZ * depth],
+    right,
+    depth,
+    span: half * 2,
+  };
 }
 
-function detourOnInner(points, arm, u, eps = 0.8) {
-  if (!u) return points;
-  const out = [];
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
-    out.push(a);
-    if (!isInnerEdge(a, b, arm, eps)) continue;
-    const ta = tAlongInner(arm, a);
-    const tb = tAlongInner(arm, b);
-    const t0 = Math.min(ta, tb);
-    const t1 = Math.max(ta, tb);
-    if (t0 > 0.55 || t1 < 0.45) continue;
-    const startToEnd = ta < tb;
-    const seq = startToEnd
-      ? [u.left, u.farL, u.farR, u.right]
-      : [u.right, u.farR, u.farL, u.left];
-    out.push(...seq);
-  }
-  return out;
+/**
+ * Hollow U from the inner flange into the glass.
+ * Inner quad = clear opening × depth (cavity).
+ * Outer quad = opening + 2×profile, depth + profile (rim walls on the inner cut).
+ */
+export function ingressGeometry(arm, opening, depth) {
+  const wall = arm.thick;
+  const innerHalf = Math.min(Math.max(opening, 2), arm.length * 0.9) / 2;
+  const outerHalf = Math.min(innerHalf + wall, arm.length * 0.49);
+  const innerDepth = Math.max(depth, 8);
+  const outerDepth = innerDepth + wall;
+  return {
+    wall,
+    opening: innerHalf * 2,
+    bay: outerHalf * 2,
+    inner: uCorners(arm, innerHalf, innerDepth),
+    outer: uCorners(arm, outerHalf, outerDepth),
+  };
 }
 
-function isInnerEdge(a, b, arm, eps) {
-  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  if (arm.axis === "x") return Math.abs(mid[1] - arm.innerAt) < eps;
-  return Math.abs(mid[0] - arm.innerAt) < eps;
-}
-
-function tAlongInner(arm, p) {
-  const [ix, iz] = alongInner(arm, 0);
-  const [jx, jz] = alongInner(arm, 1);
-  const dx = jx - ix;
-  const dz = jz - iz;
-  const len2 = dx * dx + dz * dz || 1;
-  return ((p[0] - ix) * dx + (p[1] - iz) * dz) / len2;
+export function ingressUDetour(arm, bay, depth) {
+  return uCorners(arm, Math.min(bay, arm.length * 0.9) / 2, depth);
 }
 
 export function outlinePoints(piece) {
-  let pts;
-  if (piece.points) pts = piece.points.map((p) => [...p]);
-  else {
-    const { x, z, w, h } = piece;
-    pts = [
-      [x, z],
-      [x + w, z],
-      [x + w, z + h],
-      [x, z + h],
-    ];
-  }
-  const f = piece.feat || {};
-  if (featHasIngress(f)) {
-    const arm = pickArm(piece, f.ingress_on || "a");
-    if (arm) {
-      const u = ingressUDetour(arm, ingressBay(f.ingress_opening), Math.max(16, f.ingress_depth || 30));
-      pts = detourOnInner(pts, arm, u);
-    }
-  }
-  return pts;
+  if (piece.points) return piece.points.map((p) => [...p]);
+  const { x, z, w, h } = piece;
+  return [
+    [x, z],
+    [x + w, z],
+    [x + w, z + h],
+    [x, z + h],
+  ];
 }
 
 export function featureShapes(piece) {
@@ -175,7 +164,11 @@ export function featureShapes(piece) {
   if (featHasIngress(f)) {
     const arm = pickArm(piece, f.ingress_on || "a");
     if (arm) {
-      const u = ingressUDetour(arm, ingressBay(f.ingress_opening), Math.max(16, f.ingress_depth || 30));
+      const u = ingressGeometry(
+        arm,
+        f.ingress_opening,
+        Math.max(16, f.ingress_depth || 30)
+      );
       shapes.push({ kind: "ingress", ...u, opens: true, hollow: true });
     }
   }
@@ -207,6 +200,20 @@ export function cordBossPath(piece, ty) {
     .join(" ");
 }
 
+/** Even-odd U: outer rim wall minus inner cavity. */
+export function ingressWallPath(piece, ty) {
+  return featureShapes(piece)
+    .filter((s) => s.kind === "ingress")
+    .map(
+      (s) =>
+        `${lPath([s.outer.left, s.outer.farL, s.outer.farR, s.outer.right], ty)} ${lPath(
+          [s.inner.left, s.inner.right, s.inner.farR, s.inner.farL],
+          ty
+        )}`
+    )
+    .join(" ");
+}
+
 export function openingFills(piece) {
   const out = [];
   for (const s of featureShapes(piece)) {
@@ -215,19 +222,19 @@ export function openingFills(piece) {
     }
     if (s.kind === "ingress") {
       const arm = pickArm(piece, piece.feat?.ingress_on || "a");
-      if (arm) out.push({ kind: "rect", ...rimBaySlot(arm, s.bay) });
+      if (arm) out.push({ kind: "rect", ...rimBaySlot(arm, s.opening) });
       out.push({
         kind: "poly",
-        points: [s.left, s.farL, s.farR, s.right],
+        points: [s.inner.left, s.inner.farL, s.inner.farR, s.inner.right],
       });
     }
   }
   return out;
 }
 
-/** Full-thickness slot so the ingress break in the bar shows background. */
-export function rimBaySlot(arm, bay) {
-  const half = Math.min(bay, arm.length * 0.9) / 2;
+/** Slot through the bar at the clear opening only — U walls stay on either side. */
+export function rimBaySlot(arm, opening) {
+  const half = Math.min(opening, arm.length * 0.9) / 2;
   const [cx, cz] = alongCenter(arm, 0.5);
   const pad = 0.6;
   if (arm.axis === "x") {

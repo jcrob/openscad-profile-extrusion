@@ -10,6 +10,7 @@ import {
 } from "../web/src/blowoutLayout.js";
 import {
   featureShapes,
+  ingressWallPath,
   openingFills,
   outlinePoints,
   piecePath,
@@ -115,10 +116,14 @@ const swFeat = featureShapes({
   arms: swL.arms,
 });
 const ingress = swFeat.find((s) => s.kind === "ingress");
-assert.ok(ingress && ingress.hollow && ingress.bay > 40, "SW hollow ingress U");
-assert.ok(ingress.farL[0] > ingress.left[0], "U opens into the glass");
+assert.ok(ingress && ingress.hollow && ingress.bay > ingress.opening, "SW hollow ingress U");
+assert.ok(ingress.inner.farL[0] > ingress.inner.left[0], "U opens into the glass");
+assert.ok(ingress.outer.span > ingress.inner.span, "rim wall around the inner cut");
+assert.ok(ingress.outer.depth > ingress.inner.depth, "back wall beyond the cavity");
 const swOutline = outlinePoints({ ...swL, kind: "corner", feat: demo.corners[0] });
-assert.ok(swOutline.length > 6, "L outline detours through the U");
+assert.equal(swOutline.length, 6, "L outline stays the bar; U is a separate wall");
+const swWall = ingressWallPath({ ...swL, kind: "corner", feat: demo.corners[0] }, (z) => -z);
+assert.match(swWall, /Z M /);
 
 const holePiece = {
   kind: "corner",
@@ -139,11 +144,13 @@ const swPiece = demoLid.pieces.find((p) => p.label === "SW");
 const swOpens = openingFills(swPiece);
 assert.ok(
   swOpens.some((s) => s.kind === "poly" && s.points.length === 4),
-  "ingress U is filled with background"
+  "ingress cavity is filled with background"
 );
+const swSlot = swOpens.find((s) => s.kind === "rect");
+assert.ok(swSlot, "ingress punches a background slot through the rim");
 assert.ok(
-  swOpens.some((s) => s.kind === "rect" && (s.w > 40 || s.h > 40)),
-  "ingress punches a background slot through the rim"
+  (swSlot.w < 50 && swSlot.h > 20) || (swSlot.h < 50 && swSlot.w > 20),
+  "slot is the inner opening, not the outer bay"
 );
 
 const sePiece = demoLid.pieces.find((p) => p.label === "SE");

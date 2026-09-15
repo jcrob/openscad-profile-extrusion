@@ -1,6 +1,13 @@
 import { useMemo } from "react";
 import { alignmentGuides, sideSegments } from "./blowoutLayout.js";
-import { cordBossPath, lPath, openingFills, piecePath, worldBounds } from "./rimDraw.js";
+import {
+  cordBossPath,
+  ingressWallPath,
+  lPath,
+  openingFills,
+  piecePath,
+  worldBounds,
+} from "./rimDraw.js";
 import {
   CORD_POS_OPTIONS,
   CORNER_ARM_HINT,
@@ -415,18 +422,6 @@ export default function RimBuilder({
               );
             })}
 
-            {logical.map((p) => (
-              <text
-                key={`lab-${p.id}`}
-                className={`piece-label${p.id === selectedId ? " on" : ""}`}
-                x={p.labelX ?? p.x + p.w / 2}
-                y={ty(p.labelZ ?? p.z + p.h / 2) + 4}
-                onClick={() => onSelect(p.id)}
-              >
-                {p.label}
-              </text>
-            ))}
-
             {pieces.flatMap((p) =>
               openingFills(p).map((s, i) => {
                 if (s.kind === "circle") {
@@ -461,6 +456,43 @@ export default function RimBuilder({
                 );
               })
             )}
+
+            {pieces.map((p) => {
+              const featured = featActive(p.feat);
+              const selectedPiece = p.id === selectedId;
+              const d = ingressWallPath(p, ty);
+              if (!d) return null;
+              const cls = [
+                "piece",
+                p.kind === "corner" ? "corner" : "straight",
+                featured ? "featured" : "",
+                selectedPiece ? "selected" : "",
+                "ingress-wall",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <path
+                  key={`${p.id}-ingress-wall`}
+                  className={cls}
+                  fillRule="evenodd"
+                  d={d}
+                  pointerEvents="none"
+                />
+              );
+            })}
+
+            {logical.map((p) => (
+              <text
+                key={`lab-${p.id}`}
+                className={`piece-label${p.id === selectedId ? " on" : ""}`}
+                x={p.labelX ?? p.x + p.w / 2}
+                y={ty(p.labelZ ?? p.z + p.h / 2) + 4}
+                onClick={() => onSelect(p.id)}
+              >
+                {p.label}
+              </text>
+            ))}
           </svg>
         </div>
 

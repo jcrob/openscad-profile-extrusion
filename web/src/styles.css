@@ -362,6 +362,12 @@ label.field.checkbox {
   stroke: none;
 }
 
+.blowout-svg-wrap .piece.ingress-wall {
+  stroke: #0b100e;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
 .align-note {
   font-family: var(--mono);
   font-size: 0.85rem;
