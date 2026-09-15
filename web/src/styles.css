@@ -364,9 +364,7 @@ label.field.checkbox {
 
 .blowout-svg-wrap .piece.ingress-wall {
   fill-rule: nonzero;
-  stroke: #0b100e;
-  stroke-width: 1.2;
-  stroke-linejoin: round;
+  stroke: none;
 }
 
 .align-note {
@@ -497,6 +495,10 @@ label.field.checkbox {
 .blowout-svg-wrap .piece.selected {
   stroke: #f4f7f5;
   stroke-width: 3;
+}
+
+.blowout-svg-wrap .piece.ingress-wall.selected {
+  stroke: none;
 }
 
 .blowout-svg-wrap .feat-ingress {
