@@ -196,20 +196,52 @@ export function featureShapes(piece) {
 }
 
 export function piecePath(piece, ty) {
-  const outline = lPath(outlinePoints(piece), ty);
-  const holes = featureShapes(piece)
-    .filter((s) => s.kind === "hole")
-    .map((s) => circlePath(s.cx, s.cz, s.inner_r, ty));
-  return [outline, ...holes].join(" ");
+  return lPath(outlinePoints(piece), ty);
 }
 
+/** Solid outer disc; inner Ø is the background overlay, not an even-odd stroke. */
 export function cordBossPath(piece, ty) {
   return featureShapes(piece)
     .filter((s) => s.kind === "hole")
-    .map((s) => `${circlePath(s.cx, s.cz, s.outer_r, ty)} ${circlePath(s.cx, s.cz, s.inner_r, ty)}`)
+    .map((s) => circlePath(s.cx, s.cz, s.outer_r, ty))
     .join(" ");
 }
 
-export function ingressUPath() {
-  return "";
+export function openingFills(piece) {
+  const out = [];
+  for (const s of featureShapes(piece)) {
+    if (s.kind === "hole") {
+      out.push({ kind: "circle", cx: s.cx, cz: s.cz, r: s.inner_r });
+    }
+    if (s.kind === "ingress") {
+      const arm = pickArm(piece, piece.feat?.ingress_on || "a");
+      if (arm) out.push({ kind: "rect", ...rimBaySlot(arm, s.bay) });
+      out.push({
+        kind: "poly",
+        points: [s.left, s.farL, s.farR, s.right],
+      });
+    }
+  }
+  return out;
+}
+
+/** Full-thickness slot so the ingress break in the bar shows background. */
+export function rimBaySlot(arm, bay) {
+  const half = Math.min(bay, arm.length * 0.9) / 2;
+  const [cx, cz] = alongCenter(arm, 0.5);
+  const pad = 0.6;
+  if (arm.axis === "x") {
+    return {
+      x: cx - half,
+      z: Math.min(arm.z, arm.innerAt) - pad,
+      w: half * 2,
+      h: arm.thick + 2 * pad,
+    };
+  }
+  return {
+    x: Math.min(arm.x, arm.innerAt) - pad,
+    z: cz - half,
+    w: arm.thick + 2 * pad,
+    h: half * 2,
+  };
 }

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { alignmentGuides, sideSegments } from "./blowoutLayout.js";
-import { cordBossPath, piecePath, worldBounds } from "./rimDraw.js";
+import { cordBossPath, lPath, openingFills, piecePath, worldBounds } from "./rimDraw.js";
 import {
   CORD_POS_OPTIONS,
   CORNER_ARM_HINT,
@@ -337,6 +337,13 @@ export default function RimBuilder({
             role="img"
             aria-label={`${layout} lid with selectable pieces`}
           >
+            <rect
+              className="svg-bg"
+              x={minX}
+              y={0}
+              width={vbW}
+              height={vbH}
+            />
             <rect className="glass" x={0} y={ty(gd)} width={gw} height={gd} />
             <text className="glass-label" x={gw / 2} y={ty(gd / 2)}>
               glass {gw}×{gd}
@@ -419,6 +426,41 @@ export default function RimBuilder({
                 {p.label}
               </text>
             ))}
+
+            {pieces.flatMap((p) =>
+              openingFills(p).map((s, i) => {
+                if (s.kind === "circle") {
+                  return (
+                    <circle
+                      key={`${p.id}-open-${i}`}
+                      className="opening"
+                      cx={s.cx}
+                      cy={ty(s.cz)}
+                      r={s.r}
+                    />
+                  );
+                }
+                if (s.kind === "rect") {
+                  return (
+                    <rect
+                      key={`${p.id}-open-${i}`}
+                      className="opening"
+                      x={s.x}
+                      y={ty(s.z + s.h)}
+                      width={s.w}
+                      height={s.h}
+                    />
+                  );
+                }
+                return (
+                  <path
+                    key={`${p.id}-open-${i}`}
+                    className="opening"
+                    d={lPath(s.points, ty)}
+                  />
+                );
+              })
+            )}
           </svg>
         </div>
 

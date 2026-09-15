@@ -351,9 +351,15 @@ label.field.checkbox {
   fill: #e0a24a;
 }
 
-.blowout-svg-wrap .cord-boss {
-  stroke: #e8f0eb;
-  stroke-width: 1.4;
+.blowout-svg-wrap .svg-bg,
+.blowout-svg-wrap .opening {
+  fill: #0b100e;
+  stroke: none;
+  pointer-events: none;
+}
+
+.blowout-svg-wrap .piece.cord-boss {
+  stroke: none;
 }
 
 .align-note {

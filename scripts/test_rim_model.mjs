@@ -8,7 +8,13 @@ import {
   sideOffset,
   sideSegments,
 } from "../web/src/blowoutLayout.js";
-import { featureShapes, outlinePoints, piecePath, worldBounds } from "../web/src/rimDraw.js";
+import {
+  featureShapes,
+  openingFills,
+  outlinePoints,
+  piecePath,
+  worldBounds,
+} from "../web/src/rimDraw.js";
 import {
   applyFeatureMode,
   bomLines,
@@ -128,5 +134,23 @@ assert.ok(hole.cx > 700 && hole.cx < 900, "hole along the SE south arm");
 const d = piecePath({ ...swL, kind: "corner", feat: demo.corners[0] }, (z) => -z);
 assert.match(d, /^M /);
 assert.ok(d.includes("H ") || d.includes("L "), "path has outline + cut");
+
+const swPiece = demoLid.pieces.find((p) => p.label === "SW");
+const swOpens = openingFills(swPiece);
+assert.ok(
+  swOpens.some((s) => s.kind === "poly" && s.points.length === 4),
+  "ingress U is filled with background"
+);
+assert.ok(
+  swOpens.some((s) => s.kind === "rect" && (s.w > 40 || s.h > 40)),
+  "ingress punches a background slot through the rim"
+);
+
+const sePiece = demoLid.pieces.find((p) => p.label === "SE");
+const seHole = featureShapes(sePiece).find((s) => s.kind === "hole");
+const seOpen = openingFills(sePiece).find((s) => s.kind === "circle");
+assert.ok(seHole && seOpen, "cord hole inner Ø fill");
+assert.equal(seOpen.r, seHole.inner_r, "background circle matches inner radius");
+assert.ok(!openingFills(sePiece).some((s) => s.kind === "circle" && s.r === seHole.outer_r));
 
 console.log("ok  rim model + assembled/blowout + BOM checks passed");
