@@ -100,17 +100,65 @@ module feeding_pip_hinge(length) {
 }
 
 // ---------------------------------------------------------------------------
-// Spline-only cut: open the left flange/stem in the bay; glass-sit stays.
+// Spline-only bay: 45° miters at the main-rim corners, glass-sit untouched.
+// Unlike ingress remove_right_rim, there is no second (green) miter into
+// the glass hook — only the inner spline band is opened.
 // ---------------------------------------------------------------------------
 
-module feeding_spline_bay_cut(z0, z1) {
-    j  = edge_ingress_joint;
-    sw = feeding_spline_w();
-    y0 = -edge_overall_height - 1;
-    yh = edge_overall_height + edge_top_ridge_grip_h + 2;
-    if (z1 > z0)
-        translate([-j, y0, z0])
-            cube([sw + 2 * j, yh, z1 - z0]);
+module feeding_spline_miter_cut(z0, z1, depth, bay) {
+    sw   = feeding_spline_w();
+    j    = edge_ingress_joint;
+    span = edge_miter_span(depth, bay);
+    y0   = -edge_overall_height - 1;
+    yh   = edge_overall_height + edge_profile_max_x + 2;
+    mz   = sw + 2 * j;
+
+    intersection() {
+        edge_miter_slab(0, z0, -45, flip = false, pull = j, span = span);
+        translate([-j, y0, z0 - j])
+            cube([sw + 2 * j, yh, mz]);
+    }
+    intersection() {
+        edge_miter_slab(0, z1, 45, flip = true, pull = j, span = span);
+        translate([-j, y0, z1 - sw - j])
+            cube([sw + 2 * j, yh, mz]);
+    }
+    z_mid0 = z0 + sw - j;
+    z_mid1 = z1 - sw + j;
+    if (z_mid1 > z_mid0)
+        translate([-j, y0, z_mid0])
+            cube([sw + 2 * j, yh, z_mid1 - z_mid0]);
+}
+
+// Outer U arms — spline profile, primary 45° seats, no glass-sit second miter.
+module feeding_outer_arm_near(z0, depth, bay) {
+    mw   = feeding_spline_w();
+    j    = edge_ingress_joint;
+    span = edge_miter_span(depth, bay);
+    difference() {
+        translate([mw, 0, 0])
+            edge_run_neg_x(z0, depth + mw + j, false, true);
+        edge_miter_slab(0, z0, -45, flip = true, pull = j, span = span);
+        edge_miter_slab(-depth, z0, -45, flip = false, pull = j, span = span);
+    }
+}
+
+module feeding_outer_arm_far(z1, depth, bay) {
+    mw   = feeding_spline_w();
+    j    = edge_ingress_joint;
+    span = edge_miter_span(depth, bay);
+    difference() {
+        translate([mw, 0, 0])
+            edge_run_neg_x(z1, depth + mw + j, true, true);
+        edge_miter_slab(0, z1, 45, flip = false, pull = j, span = span);
+        edge_miter_slab(-depth, z1, 45, flip = true, pull = j, span = span);
+    }
+}
+
+module feeding_outer_u(z0, z1, depth, bay) {
+    feeding_outer_arm_near(z0, depth, bay);
+    feeding_outer_arm_far(z1, depth, bay);
+    edge_ingress_back(z0, z1, depth, bay, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -143,15 +191,44 @@ module feeding_inner_rect(x_near, x_far, z0, z1) {
     j  = edge_ingress_joint;
     len_z = z1 - z0;
     len_x = x_near - x_far;
+    span = edge_miter_span(len_x, len_z);
+    y0 = -edge_overall_height - 1;
+    yh = edge_overall_height + edge_top_ridge_grip_h + 2;
     if (len_z > sw && len_x > sw) {
-        translate([x_near, 0, 0])
-            edge_run_z(z0 - j, len_z + 2 * j, true);
-        translate([x_far, 0, 0])
-            edge_run_z(z0 - j, len_z + 2 * j, true);
-        translate([x_near, 0, 0])
-            edge_run_neg_x(z0, len_x + sw + j, false, true);
-        translate([x_near, 0, 0])
-            edge_run_neg_x(z1, len_x + sw + j, true, true);
+        // Clip to the door's outer rectangle so corner profiles cannot
+        // poke past the outer U (unmitered T-joints would stick out).
+        intersection() {
+            union() {
+                // Near / far Z bars — complementary 45° seats to the X bars
+                difference() {
+                    translate([x_near, 0, 0])
+                        edge_run_z(z0 - j, len_z + 2 * j, true);
+                    edge_miter_slab(x_near, z0, -45, flip = false, pull = j, span = span);
+                    edge_miter_slab(x_near, z1, 45, flip = true, pull = j, span = span);
+                }
+                difference() {
+                    translate([x_far, 0, 0])
+                        edge_run_z(z0 - j, len_z + 2 * j, true);
+                    edge_miter_slab(x_far, z0, -45, flip = true, pull = j, span = span);
+                    edge_miter_slab(x_far, z1, 45, flip = false, pull = j, span = span);
+                }
+                // X bars — length is origin-to-origin (no extra +spline)
+                difference() {
+                    translate([x_near, 0, 0])
+                        edge_run_neg_x(z0, len_x + j, false, true);
+                    edge_miter_slab(x_near, z0, -45, flip = true, pull = j, span = span);
+                    edge_miter_slab(x_far, z0, -45, flip = false, pull = j, span = span);
+                }
+                difference() {
+                    translate([x_near, 0, 0])
+                        edge_run_neg_x(z1, len_x + j, true, true);
+                    edge_miter_slab(x_near, z1, 45, flip = false, pull = j, span = span);
+                    edge_miter_slab(x_far, z1, 45, flip = true, pull = j, span = span);
+                }
+            }
+            translate([x_far - j, y0, z0 - j])
+                cube([len_x + sw + 2 * j, yh, len_z + 2 * j]);
+        }
     }
 }
 
@@ -198,10 +275,10 @@ module edge_feeding_door(length, opening, depth, z_center = undef,
 
     difference() {
         union() {
-            // Outer spline U (ingress layout, remove_right_rim, no glass-sit cut)
-            edge_ingress_arms_back(z0, z1, outer_d, bay, true, false);
+            // Outer spline U: 45° seats into the main spline, glass-sit stays
+            feeding_outer_u(z0, z1, outer_d, bay);
 
-            // Inner spline rectangle
+            // Inner spline rectangle (mitered, clipped inside the outer U)
             feeding_inner_rect(x_near, x_far, z0d, z1d);
 
             // Mount + PIP hinge join the door to the main rim
@@ -219,5 +296,6 @@ module edge_feeding_door(length, opening, depth, z_center = undef,
 module edge_feeding_spline_cut_only(length, opening, depth, z_center = undef) {
     zc = is_undef(z_center) ? length / 2 : z_center;
     bay = feeding_bay(opening);
-    feeding_spline_bay_cut(zc - bay / 2, zc + bay / 2);
+    outer_d = feeding_outer_depth(depth);
+    feeding_spline_miter_cut(zc - bay / 2, zc + bay / 2, outer_d, bay);
 }

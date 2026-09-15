@@ -226,6 +226,33 @@ assert.ok(
 );
 const g = feedingGeometry(arm, 70, 40);
 assert.ok(g.hinge.a && g.hinge.b, "hinge along the main rim");
+assert.ok(
+  g.doorOuter.span < g.inner.span,
+  "inner door along-span sits inside the outer U cavity"
+);
+assert.ok(
+  g.doorOuter.depth < g.inner.depth,
+  "inner door depth sits inside the outer U cavity"
+);
+const doorInCavity = (pt) => {
+  const [ix, iz] = g.inner.left;
+  const [jx, jz] = g.inner.right;
+  const [fx, fz] = g.inner.farL;
+  const minX = Math.min(ix, jx, fx, g.inner.farR[0]) - 0.05;
+  const maxX = Math.max(ix, jx, fx, g.inner.farR[0]) + 0.05;
+  const minZ = Math.min(iz, jz, fz, g.inner.farR[1]) - 0.05;
+  const maxZ = Math.max(iz, jz, fz, g.inner.farR[1]) + 0.05;
+  return pt[0] >= minX && pt[0] <= maxX && pt[1] >= minZ && pt[1] <= maxZ;
+};
+assert.ok(
+  [
+    g.doorOuter.left,
+    g.doorOuter.farL,
+    g.doorOuter.farR,
+    g.doorOuter.right,
+  ].every(doorInCavity),
+  "inner door outer rectangle stays inside the outer U inner cavity"
+);
 
 const both = applyFeatureMode(emptyFeat(), "feeding_door");
 assert.equal(both.lid_ingress, false, "feeding mode clears ingress");

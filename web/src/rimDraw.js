@@ -165,7 +165,7 @@ export function feedingGeometry(arm, opening, depth) {
   const inset = 1.2;
   const doorOuterHalf = Math.max(innerHalf - gap, wall + 2);
   const doorInnerHalf = Math.max(doorOuterHalf - wall, 2);
-  const doorOuterDepth = Math.max(innerDepth - gap, wall * 2 + 4);
+  const doorOuterDepth = Math.max(innerDepth - 2 * gap, wall * 2 + 4);
   const doorInnerDepth = Math.max(doorOuterDepth - 2 * wall, 4);
   const doorNear = inset - gap;
   return {
