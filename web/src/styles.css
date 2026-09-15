@@ -363,6 +363,7 @@ label.field.checkbox {
 }
 
 .blowout-svg-wrap .piece.ingress-wall {
+  fill-rule: nonzero;
   stroke: #0b100e;
   stroke-width: 1.2;
   stroke-linejoin: round;

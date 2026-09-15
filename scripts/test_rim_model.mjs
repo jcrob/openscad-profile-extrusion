@@ -11,6 +11,7 @@ import {
 import {
   featureShapes,
   ingressWallPath,
+  ingressWallPoints,
   openingFills,
   outlinePoints,
   piecePath,
@@ -122,8 +123,12 @@ assert.ok(ingress.outer.span > ingress.inner.span, "rim wall around the inner cu
 assert.ok(ingress.outer.depth > ingress.inner.depth, "back wall beyond the cavity");
 const swOutline = outlinePoints({ ...swL, kind: "corner", feat: demo.corners[0] });
 assert.equal(swOutline.length, 6, "L outline stays the bar; U is a separate wall");
+const swWallPts = ingressWallPoints(ingress);
+assert.equal(swWallPts.length, 8, "U wall is a single 8-point ribbon");
+assert.ok(swWallPts[1][0] > swWallPts[0][0], "outer wall goes into the glass");
 const swWall = ingressWallPath({ ...swL, kind: "corner", feat: demo.corners[0] }, (z) => -z);
-assert.match(swWall, /Z M /);
+assert.match(swWall, /^M /);
+assert.ok(!swWall.includes(" Z M "), "U wall is one subpath, not even-odd quads");
 
 const holePiece = {
   kind: "corner",

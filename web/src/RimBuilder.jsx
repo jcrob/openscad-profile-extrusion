@@ -475,7 +475,7 @@ export default function RimBuilder({
                 <path
                   key={`${p.id}-ingress-wall`}
                   className={cls}
-                  fillRule="evenodd"
+                  fillRule="nonzero"
                   d={d}
                   pointerEvents="none"
                 />

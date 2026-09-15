@@ -200,17 +200,18 @@ export function cordBossPath(piece, ty) {
     .join(" ");
 }
 
-/** Even-odd U: outer rim wall minus inner cavity. */
+/** Closed U ribbon: outer three sides then back along the inner cut. */
+export function ingressWallPoints(s) {
+  const o = s.outer;
+  const i = s.inner;
+  return [o.left, o.farL, o.farR, o.right, i.right, i.farR, i.farL, i.left];
+}
+
+/** Filled U walls (nonzero winding — not even-odd hole pairs). */
 export function ingressWallPath(piece, ty) {
   return featureShapes(piece)
     .filter((s) => s.kind === "ingress")
-    .map(
-      (s) =>
-        `${lPath([s.outer.left, s.outer.farL, s.outer.farR, s.outer.right], ty)} ${lPath(
-          [s.inner.left, s.inner.right, s.inner.farR, s.inner.farL],
-          ty
-        )}`
-    )
+    .map((s) => lPath(ingressWallPoints(s), ty))
     .join(" ");
 }
 
