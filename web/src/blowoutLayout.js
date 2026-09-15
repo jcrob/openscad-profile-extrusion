@@ -1,6 +1,7 @@
 // Mirrors rim_rectangular_lid.scad planning + blowout offset math (XZ plane).
 
 export const EDGE_PROFILE_MAX_X = 29.2; // 2.8+3.4+6 + 6 + 11
+export const SPLINE_W = 12.2; // inner spline / no-right-rim width (stem_root_right)
 export const RIM_MAX_PIECE_LEN = 200;
 export const RIM_CORNER_SPLIT = 400;
 export const RIM_LAYOUT_GAP = 12;

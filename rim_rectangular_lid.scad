@@ -22,7 +22,10 @@
 //   [7] ingress_depth      mm
 //   [8] ingress_on         "a"|"b"  (corners only)
 //   [9] cord_hole_on       "a"|"b"  (corners only)
-//   [10] cord_under_on     "a"|"b"  (corners only)
+//   [11] feeding_door      bool
+//   [12] feeding opening   mm (0 = off); bay = opening + 2×spline
+//   [13] feeding_depth     mm
+//   [14] feeding_on        "a"|"b"  (corners only)
 //
 //   RIM_FEAT_NONE = default row; override corner_features[0..3] (SW,SE,NE,NW)
 //   and side_features[side][seg] for middle straight pieces on each side.
@@ -33,7 +36,8 @@ include <rim_piece_assembly.scad>
 RIM_FEAT_NONE = [
     false, 6, "middle",
     false, 20,
-    false, 0, edge_ingress_depth, "a", "a", "a"
+    false, 0, edge_ingress_depth, "a", "a", "a",
+    false, 0, 40, "a"
 ];
 
 /* [Glass / frame] */
@@ -94,6 +98,10 @@ function rim_feat_ingress_dep(f) = f[7];
 function rim_feat_ingress_on(f)  = f[8];
 function rim_feat_cord_on(f)     = f[9];
 function rim_feat_under_on(f)    = f[10];
+function rim_feat_feed(f)        = len(f) > 11 && f[11] && f[12] > 0;
+function rim_feat_feed_open(f)   = len(f) > 12 ? f[12] : 0;
+function rim_feat_feed_dep(f)    = len(f) > 13 ? f[13] : 40;
+function rim_feat_feed_on(f)     = len(f) > 14 ? f[14] : "a";
 
 function rim_side_feat_list(side_idx, lists) =
     side_idx == 0 ? lists[0] :
@@ -127,9 +135,11 @@ function rim_rect_auto_corner_leg(gw, gd, max_len = rim_max_piece_len, split = r
     max(edge_profile_max_x + 1, min(leg_w, leg_d));
 
 function rim_corner_feat_min_leg(f, base_leg) =
-    rim_feat_ingress(f)
-        ? max(base_leg, rim_feat_ingress_len(f) + 4)
-        : base_leg;
+    let (
+        in_need = rim_feat_ingress(f) ? rim_feat_ingress_len(f) + 4 : base_leg,
+        fd_need = rim_feat_feed(f) ? feeding_bay(rim_feat_feed_open(f)) + 4 : base_leg
+    )
+    max(base_leg, in_need, fd_need);
 
 function rim_rect_effective_corner_leg(
     gw = glass_width, gd = glass_depth,
@@ -286,7 +296,11 @@ module rim_rect_place_corner(ci, leg = undef, feat = undef,
             lid_ingress = rim_feat_ingress(f),
             ingress_depth = rim_feat_ingress_dep(f),
             ingress_length = rim_feat_ingress_len(f),
-            ingress_on = rim_feat_ingress_on(f)
+            ingress_on = rim_feat_ingress_on(f),
+            feeding_door = rim_feat_feed(f),
+            feeding_opening = rim_feat_feed_open(f),
+            feeding_depth = rim_feat_feed_dep(f),
+            feeding_on = rim_feat_feed_on(f)
         );
 }
 
@@ -331,7 +345,10 @@ module rim_rect_place_straight(side_idx, seg_idx, length, feat = undef,
             cord_under_gap_len = rim_feat_under_gap(f),
             lid_ingress = rim_feat_ingress(f),
             ingress_depth = rim_feat_ingress_dep(f),
-            ingress_length = rim_feat_ingress_len(f)
+            ingress_length = rim_feat_ingress_len(f),
+            feeding_door = rim_feat_feed(f),
+            feeding_opening = rim_feat_feed_open(f),
+            feeding_depth = rim_feat_feed_dep(f)
         );
 }
 
@@ -364,12 +381,14 @@ function rim_feat(
     cord_hole = false, cord_d = 6, cord_pos = "middle",
     cord_under = false, under_gap = 20,
     ingress = false, ingress_len = 0, ingress_dep = edge_ingress_depth,
-    ingress_on = "a", cord_on = "a", under_on = "a"
+    ingress_on = "a", cord_on = "a", under_on = "a",
+    feeding = false, feeding_len = 0, feeding_dep = 40, feeding_on = "a"
 ) = [
     cord_hole, cord_d, cord_pos,
     cord_under, under_gap,
     ingress, ingress_len, ingress_dep,
-    ingress_on, cord_on, under_on
+    ingress_on, cord_on, under_on,
+    feeding, feeding_len, feeding_dep, feeding_on
 ];
 
 module rim_rect_draw_plate_outline() {

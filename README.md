@@ -4,7 +4,7 @@ Local LAN webapp: configure edge/corner aquarium-lid parts, generate STLs with O
 
 ## Features
 
-- **Rim builder** — glass width/depth, per-piece feature dropdowns (cord hole, cord under, lid ingress), assembled or blowout preview
+- **Rim builder** — glass width/depth, per-piece feature dropdowns (cord hole, cord under, lid ingress, feeding door), assembled or blowout preview
 - **Auto BOM** — corner L pieces and chained straights with lengths, joins, features, CSV download
 - **OpenSCAD export** — generated lid file with the same feature vectors as `rim_rectangular_lid.scad`
 - **Print job** — arrange featured straights plus stock corners (Orca / Bambu LAN when available)
@@ -149,6 +149,8 @@ web/              Vite + React UI
 scad/             Symlinks to OpenSCAD sources
 print-profiles/   Locked Bambu/Orca JSON
 rim_piece_assembly.scad   unified edge + corner geometry
+feeding_door.scad         dual-spline feeding hatch + PIP hinge
+rim_rectangular_lid.scad  glass-size → assembled / blowout / plate frame
 rim_rectangular_lid.scad  glass-size → assembled / blowout / plate frame
 edgereplica.scad / cornerpiece.scad / profile_extrusion.scad  thin entrypoints
 ```
@@ -158,6 +160,26 @@ edgereplica.scad / cornerpiece.scad / profile_extrusion.scad  thin entrypoints
 `rim_rectangular_lid.scad` builds a four-sided rim from the **max glass-channel span** (the pane) as `glass_width` × `glass_depth`. Placement already offsets by profile width. Each side splits into ≤200 mm pieces plus L-corners.
 
 Ingress **opening** is the clear pass-through you type. The U bay length is `opening + pad`, where pad is `2 × edge_profile_max_x` (~60 mm) unless you set `rim_ingress_opening_offset`.
+
+**Feeding door** is a dual-spline hatch on a rim piece. Both frames use the current inner spline (`no_right_rim` / `edge_stem_root_right`, ~12.2 mm):
+
+- **Outer U** — same layout as lid ingress with `remove_right_rim`, continuous with the main tank screen. The sit-on-glass rim is **not** cut.
+- **Inner door** — a spline-only rectangle inside that U, joined to the main rim with a BOSL2-style print-in-place knuckle hinge (`in_place` interlocking cones; a self-contained subset lives in `feeding_door.scad`).
+- **Sit-on latch** — tab on the door far bar; matching pocket on the inner face of the outer back wall.
+
+Bay along the piece is `opening + 2 × spline width`. Feeding door and lid ingress cannot share one piece.
+
+```openscad
+include <rim_piece_assembly.scad>
+rim_piece_assembly(
+    length = 180,
+    edge_join_ends = 2,
+    feeding_door = true,
+    feeding_opening = 70,
+    feeding_depth = 40
+);
+// or: openscad -D demo_mode='"feeding_door"' profile_extrusion.scad
+```
 
 ```openscad
 include <rim_rectangular_lid.scad>

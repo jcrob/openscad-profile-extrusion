@@ -6,7 +6,7 @@ include <rim_piece_assembly.scad>
 demo_mode = "default";
 // "default" | "male_both" | "female_both" | "start_male_finish_female"
 // | "start_female_finish_male" | "corner_end" | "rim_corner" | "ingress"
-// | "combo" | "rim_corner_ingress_a" | "rim_corner_ingress_b"
+// | "combo" | "rim_corner_ingress_a" | "rim_corner_ingress_b" | "feeding_door"
 // Rectangular lid demos: open rim_rectangular_lid.scad (or rim_rect_demo.scad).
 
 if (demo_mode == "default")
@@ -84,4 +84,13 @@ if (demo_mode == "rim_corner_ingress_b")
         ingress_depth = 28,
         ingress_length = 10,
         ingress_on = "b"
+    );
+
+if (demo_mode == "feeding_door")
+    rim_piece_assembly(
+        length = 180,
+        edge_join_ends = 2,
+        feeding_door = true,
+        feeding_opening = 70,
+        feeding_depth = 40
     );

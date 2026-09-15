@@ -51,7 +51,10 @@ rim_piece_assembly(
     lid_ingress = {_scad_bool(edge.lid_ingress)},
     ingress_depth = {edge.ingress_depth},
     ingress_length = {edge.ingress_length},
-    ingress_remove_right_rim = {_scad_bool(edge.ingress_remove_right_rim)}
+    ingress_remove_right_rim = {_scad_bool(edge.ingress_remove_right_rim)},
+    feeding_door = {_scad_bool(edge.feeding_door)},
+    feeding_opening = {edge.feeding_opening},
+    feeding_depth = {edge.feeding_depth}
 );
 """,
         encoding="utf-8",
@@ -86,7 +89,12 @@ def run_openscad(
 def estimate_footprint_mm(part: EdgePart | CornerPart) -> tuple[float, float]:
     """Rough XY footprint for plate-fill warning (mm)."""
     if isinstance(part, EdgePart):
-        w = 14.0 + (part.ingress_depth if part.lid_ingress else 0)
+        extra = 0.0
+        if part.lid_ingress:
+            extra = max(extra, part.ingress_depth)
+        if part.feeding_door:
+            extra = max(extra, part.feeding_depth + 12.2)
+        w = 14.0 + extra
         d = part.length
         return (w, d)
     # Full corner assembly (both halves) ~ 55x35

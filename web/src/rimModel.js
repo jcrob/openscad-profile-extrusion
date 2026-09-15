@@ -4,6 +4,7 @@
 import {
   EDGE_PROFILE_MAX_X,
   RIM_MAX_PIECE_LEN,
+  SPLINE_W,
   autoCornerLeg,
   blowoutGapSize,
   layoutPieces,
@@ -25,6 +26,7 @@ export const FEATURE_MODES = [
   { value: "cord_hole", label: "Cord hole" },
   { value: "cord_under", label: "Cord under" },
   { value: "ingress", label: "Lid ingress" },
+  { value: "feeding_door", label: "Feeding door" },
   { value: "combine", label: "Combine features" },
 ];
 
@@ -47,6 +49,10 @@ export function emptyFeat() {
     ingress_on: "a",
     cord_hole_on: "a",
     cord_under_on: "a",
+    feeding_door: false,
+    feeding_opening: 70,
+    feeding_depth: 40,
+    feeding_on: "a",
   };
 }
 
@@ -70,20 +76,31 @@ export function ingressBay(opening) {
   return opening > 0 ? opening + ingressPad() : 0;
 }
 
+export function feedingBay(opening) {
+  return opening > 0 ? opening + 2 * SPLINE_W : 0;
+}
+
 export function featHasIngress(f) {
   return Boolean(f?.lid_ingress && f.ingress_opening > 0);
 }
 
+export function featHasFeeding(f) {
+  return Boolean(f?.feeding_door && f.feeding_opening > 0);
+}
+
 export function featActive(f) {
-  return Boolean(f?.cord_hole || f?.cord_under || featHasIngress(f));
+  return Boolean(f?.cord_hole || f?.cord_under || featHasIngress(f) || featHasFeeding(f));
 }
 
 export function featureMode(f) {
-  const n = [f?.cord_hole, f?.cord_under, featHasIngress(f)].filter(Boolean).length;
+  const n = [f?.cord_hole, f?.cord_under, featHasIngress(f), featHasFeeding(f)].filter(
+    Boolean
+  ).length;
   if (n === 0) return "none";
   if (n > 1) return "combine";
   if (f.cord_hole) return "cord_hole";
   if (f.cord_under) return "cord_under";
+  if (featHasFeeding(f)) return "feeding_door";
   return "ingress";
 }
 
@@ -93,12 +110,17 @@ export function applyFeatureMode(f, mode) {
   next.cord_hole = mode === "cord_hole";
   next.cord_under = mode === "cord_under";
   next.lid_ingress = mode === "ingress";
+  next.feeding_door = mode === "feeding_door";
   if (mode === "ingress" && !(next.ingress_opening > 0)) next.ingress_opening = 40;
+  if (mode === "feeding_door" && !(next.feeding_opening > 0)) next.feeding_opening = 70;
   return next;
 }
 
 export function cornerFeatMinLeg(f, baseLeg) {
-  return featHasIngress(f) ? Math.max(baseLeg, ingressBay(f.ingress_opening) + 4) : baseLeg;
+  let need = baseLeg;
+  if (featHasIngress(f)) need = Math.max(need, ingressBay(f.ingress_opening) + 4);
+  if (featHasFeeding(f)) need = Math.max(need, feedingBay(f.feeding_opening) + 4);
+  return need;
 }
 
 export function effectiveCornerLeg(gw, gd, corners = emptyCorners()) {
@@ -137,6 +159,12 @@ export function featSummary(f, { corner = false, cornerIdx = 0 } = {}) {
       `Ingress opening ${f.ingress_opening} mm (bay ${bay.toFixed(0)} mm)${arm(f.ingress_on)}`
     );
   }
+  if (featHasFeeding(f)) {
+    const bay = feedingBay(f.feeding_opening);
+    bits.push(
+      `Feeding door opening ${f.feeding_opening} mm (bay ${bay.toFixed(0)} mm)${arm(f.feeding_on)}`
+    );
+  }
   return bits.join(" · ");
 }
 
@@ -145,12 +173,18 @@ export function ingressFits(f, pieceLen) {
   return ingressBay(f.ingress_opening) + 4 <= pieceLen;
 }
 
+export function feedingFits(f, pieceLen) {
+  if (!featHasFeeding(f)) return true;
+  return feedingBay(f.feeding_opening) + 4 <= pieceLen;
+}
+
 export function featKey(f) {
   if (!featActive(f)) return "none";
   return [
     f.cord_hole ? `h:${f.cord_hole_inner_d}:${f.cord_hole_pos}:${f.cord_hole_on}` : "",
     f.cord_under ? `u:${f.cord_under_gap_len}:${f.cord_under_on}` : "",
     featHasIngress(f) ? `i:${f.ingress_opening}:${f.ingress_depth}:${f.ingress_on}` : "",
+    featHasFeeding(f) ? `f:${f.feeding_opening}:${f.feeding_depth}:${f.feeding_on}` : "",
   ].join("|");
 }
 
@@ -247,6 +281,9 @@ export function toPrintParts(lines) {
       ingress_depth: f.ingress_depth,
       ingress_length: featHasIngress(f) ? ingressBay(f.ingress_opening) : 40,
       ingress_remove_right_rim: false,
+      feeding_door: featHasFeeding(f),
+      feeding_opening: f.feeding_opening,
+      feeding_depth: f.feeding_depth,
     });
   }
   return parts;
@@ -276,6 +313,14 @@ function scadFeat(f) {
       `ingress_len = ${f.ingress_opening}`,
       `ingress_dep = ${f.ingress_depth}`,
       `ingress_on = "${f.ingress_on}"`
+    );
+  }
+  if (featHasFeeding(f)) {
+    args.push(
+      `feeding = true`,
+      `feeding_len = ${f.feeding_opening}`,
+      `feeding_dep = ${f.feeding_depth}`,
+      `feeding_on = "${f.feeding_on}"`
     );
   }
   return `rim_feat(${args.join(", ")})`;
@@ -338,7 +383,12 @@ export function demoFeatures() {
   const sides = [
     [
       { ...emptyFeat(), lid_ingress: true, ingress_opening: opening, ingress_depth: 30 },
-      { ...emptyFeat(), cord_under: true, cord_under_gap_len: 20 },
+      {
+        ...emptyFeat(),
+        feeding_door: true,
+        feeding_opening: 70,
+        feeding_depth: 40,
+      },
       { ...emptyFeat(), cord_hole: true, cord_hole_inner_d: 8, cord_hole_pos: "left" },
     ],
     [{ ...emptyFeat(), cord_hole: true, cord_hole_inner_d: 10, cord_hole_pos: "right" }],

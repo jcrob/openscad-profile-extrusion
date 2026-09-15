@@ -7,9 +7,14 @@ import {
   cornerOffset,
   sideOffset,
   sideSegments,
+  SPLINE_W,
 } from "../web/src/blowoutLayout.js";
 import {
   featureShapes,
+  feedingDoorFramePoints,
+  feedingGeometry,
+  feedingSplineSlot,
+  feedingWallPoints,
   ingressWallPath,
   ingressWallPoints,
   openingFills,
@@ -28,6 +33,7 @@ import {
   emptySides,
   featSummary,
   featureMode,
+  feedingBay,
   ingressBay,
   rimScadSource,
   syncSideFeats,
@@ -164,5 +170,64 @@ const seOpen = openingFills(sePiece).find((s) => s.kind === "circle");
 assert.ok(seHole && seOpen, "cord hole inner Ø fill");
 assert.equal(seOpen.r, seHole.inner_r, "background circle matches inner radius");
 assert.ok(!openingFills(sePiece).some((s) => s.kind === "circle" && s.r === seHole.outer_r));
+
+assert.equal(feedingBay(70), 70 + 2 * SPLINE_W, "feeding bay = opening + 2×spline");
+assert.equal(featureMode(applyFeatureMode(emptyFeat(), "feeding_door")), "feeding_door");
+assert.match(featSummary(demo.sides[0][1]), /Feeding door/);
+assert.match(scad, /rim_feat\([\s\S]*feeding = true/);
+assert.ok(parts.some((p) => p.kind === "edge" && p.feeding_door));
+
+const fatFeed = applyFeatureMode(emptyFeat(), "feeding_door");
+fatFeed.feeding_opening = 180;
+const fatFeedCorners = [fatFeed, emptyFeat(), emptyFeat(), emptyFeat()];
+const fatFeedLid = buildLid(
+  900,
+  600,
+  fatFeedCorners,
+  syncSideFeats(900, 600, fatFeedCorners, emptySides()),
+  "assembled"
+);
+assert.ok(fatFeedLid.leg > 200, `feeding grows corner leg, got ${fatFeedLid.leg}`);
+assert.ok(feedingBay(180) + 4 <= fatFeedLid.leg);
+
+const s2 = demoLid.pieces.find((p) => p.label === "S2");
+const feed = featureShapes(s2).find((s) => s.kind === "feeding");
+assert.ok(feed && feed.hollow, "south feeding door");
+assert.equal(feed.wall, SPLINE_W, "outer and inner rims use inner spline width");
+assert.ok(feed.bay > feed.opening, "outer U wider than clear opening");
+assert.ok(feed.outer.depth > feed.inner.depth, "outer back wall beyond the cavity");
+assert.ok(feed.doorOuter && feed.doorInner, "inner door is a spline rectangle");
+const doorPts = feedingDoorFramePoints(feed);
+assert.equal(doorPts.length, 8, "inner door is a single 8-point ribbon");
+assert.equal(feedingWallPoints(feed).length, 8, "outer feeding U is an 8-point ribbon");
+
+const feedOpens = openingFills(s2);
+const feedSlot = feedOpens.find((s) => s.kind === "rect");
+assert.ok(feedSlot, "feeding spline gap is wrap background");
+assert.ok(
+  Math.abs(Math.min(feedSlot.w, feedSlot.h) - SPLINE_W) < 0.01,
+  "slot is spline-width only — glass-sit is not broken"
+);
+assert.ok(
+  Math.max(feedSlot.w, feedSlot.h) > 20,
+  "slot follows the feeding bay along the piece"
+);
+const southBar = s2.h;
+assert.ok(southBar > SPLINE_W + 1, "south bar still has glass-sit thickness");
+assert.ok(
+  Math.min(feedSlot.w, feedSlot.h) < southBar - 1,
+  "feeding does not punch the full bar like ingress"
+);
+
+const arm = s2.arms.a;
+const slot = feedingSplineSlot(arm, feed.bay);
+assert.ok(
+  Math.abs(slot.h - SPLINE_W) < 0.01 || Math.abs(slot.w - SPLINE_W) < 0.01
+);
+const g = feedingGeometry(arm, 70, 40);
+assert.ok(g.hinge.a && g.hinge.b, "hinge along the main rim");
+
+const both = applyFeatureMode(emptyFeat(), "feeding_door");
+assert.equal(both.lid_ingress, false, "feeding mode clears ingress");
 
 console.log("ok  rim model + assembled/blowout + BOM checks passed");

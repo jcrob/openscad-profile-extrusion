@@ -206,8 +206,8 @@ export default function App() {
         <h2>Bill of materials</h2>
         <p className="blowout-copy">
           Pieces come from the glass size and corner-leg plan. Identical
-          straights collapse to one line with quantity. Ingress on a corner can
-          lengthen every corner leg.
+          straights collapse to one line with quantity. Ingress or a feeding
+          door on a corner can lengthen every corner leg.
         </p>
         <div className="bom">
           <div className="stat">

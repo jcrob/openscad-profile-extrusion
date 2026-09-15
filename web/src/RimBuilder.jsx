@@ -2,6 +2,10 @@ import { useMemo } from "react";
 import { alignmentGuides, sideSegments } from "./blowoutLayout.js";
 import {
   cordBossPath,
+  feedingDoorPath,
+  feedingHingePath,
+  feedingLatchPath,
+  feedingWallPath,
   ingressWallPath,
   lPath,
   openingFills,
@@ -19,13 +23,17 @@ import {
   buildLid,
   cloneFeat,
   featActive,
+  featHasFeeding,
   featHasIngress,
   featSummary,
   featureMode,
+  feedingBay,
+  feedingFits,
   ingressBay,
   ingressFits,
   ingressPad,
 } from "./rimModel.js";
+import { SPLINE_W } from "./blowoutLayout.js";
 
 function Field({ label, children, checkbox }) {
   return (
@@ -62,7 +70,9 @@ function FeatureEditor({ piece, onChange }) {
   const mode = featureMode(f);
   const isCorner = piece.kind === "corner";
   const fits = ingressFits(f, piece.length);
+  const feedFits = feedingFits(f, piece.length);
   const bay = featHasIngress(f) ? ingressBay(f.ingress_opening) : 0;
+  const feedBay = featHasFeeding(f) ? feedingBay(f.feeding_opening) : 0;
 
   return (
     <div className="feature-editor">
@@ -110,7 +120,24 @@ function FeatureEditor({ piece, onChange }) {
             <input
               type="checkbox"
               checked={f.lid_ingress}
-              onChange={(e) => set({ lid_ingress: e.target.checked })}
+              onChange={(e) =>
+                set({
+                  lid_ingress: e.target.checked,
+                  feeding_door: e.target.checked ? false : f.feeding_door,
+                })
+              }
+            />
+          </Field>
+          <Field label="Feeding door" checkbox>
+            <input
+              type="checkbox"
+              checked={f.feeding_door}
+              onChange={(e) =>
+                set({
+                  feeding_door: e.target.checked,
+                  lid_ingress: e.target.checked ? false : f.lid_ingress,
+                })
+              }
             />
           </Field>
         </div>
@@ -211,6 +238,44 @@ function FeatureEditor({ piece, onChange }) {
         </p>
       )}
 
+      {f.feeding_door && (
+        <div className="grid">
+          <Field label="Clear opening (mm)">
+            <input
+              type="number"
+              min={1}
+              value={f.feeding_opening}
+              onChange={(e) => set({ feeding_opening: Number(e.target.value) })}
+            />
+          </Field>
+          <Field label="Door depth (mm)">
+            <input
+              type="number"
+              min={1}
+              value={f.feeding_depth}
+              onChange={(e) => set({ feeding_depth: Number(e.target.value) })}
+            />
+          </Field>
+          {isCorner && (
+            <Field label="Door on arm">
+              <ArmSelect
+                value={f.feeding_on}
+                onChange={(feeding_on) => set({ feeding_on })}
+                cornerIdx={piece.cornerIdx}
+              />
+            </Field>
+          )}
+        </div>
+      )}
+
+      {f.feeding_door && (
+        <p className={`align-note ${feedFits ? "ok" : "bad"}`}>
+          {feedFits
+            ? `Spline bay is opening + 2×${SPLINE_W} mm = ${feedBay.toFixed(0)} mm. Glass-sit stays continuous; inner door is a hinged spline rectangle with a sit-on latch.`
+            : `Opening ${f.feeding_opening} mm needs a ${feedBay.toFixed(0)} mm bay; this piece is only ${piece.length.toFixed(0)} mm. Use a longer segment or a smaller opening.`}
+        </p>
+      )}
+
       {!featActive(f) && (
         <p className="feature-hint">
           No cutouts on this piece. Joins stay male/female as planned for the
@@ -276,8 +341,8 @@ export default function RimBuilder({
           <h2>Build rim</h2>
           <p className="blowout-copy">
             Set the glass-channel span, then assign cord holes, cord-under
-            notches, or lid ingress on each corner and straight. Switch
-            assembled and blowout without changing the BOM.
+            notches, lid ingress, or a feeding door on each corner and straight.
+            Switch assembled and blowout without changing the BOM.
           </p>
         </div>
         <div className="view-toggle" role="group" aria-label="Lid view">
@@ -476,6 +541,84 @@ export default function RimBuilder({
                   key={`${p.id}-ingress-wall`}
                   className={cls}
                   fillRule="nonzero"
+                  d={d}
+                  pointerEvents="none"
+                />
+              );
+            })}
+
+            {pieces.map((p) => {
+              const featured = featActive(p.feat);
+              const selectedPiece = p.id === selectedId;
+              const d = feedingWallPath(p, ty);
+              if (!d) return null;
+              const cls = [
+                "piece",
+                p.kind === "corner" ? "corner" : "straight",
+                featured ? "featured" : "",
+                selectedPiece ? "selected" : "",
+                "ingress-wall",
+                "feeding-wall",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <path
+                  key={`${p.id}-feeding-wall`}
+                  className={cls}
+                  fillRule="nonzero"
+                  d={d}
+                  pointerEvents="none"
+                />
+              );
+            })}
+
+            {pieces.map((p) => {
+              const featured = featActive(p.feat);
+              const selectedPiece = p.id === selectedId;
+              const d = feedingDoorPath(p, ty);
+              if (!d) return null;
+              const cls = [
+                "piece",
+                p.kind === "corner" ? "corner" : "straight",
+                featured ? "featured" : "",
+                selectedPiece ? "selected" : "",
+                "ingress-wall",
+                "feeding-door",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <path
+                  key={`${p.id}-feeding-door`}
+                  className={cls}
+                  fillRule="nonzero"
+                  d={d}
+                  pointerEvents="none"
+                />
+              );
+            })}
+
+            {pieces.map((p) => {
+              const d = feedingHingePath(p, ty);
+              if (!d) return null;
+              return (
+                <path
+                  key={`${p.id}-feeding-hinge`}
+                  className="feeding-hinge"
+                  d={d}
+                  pointerEvents="none"
+                />
+              );
+            })}
+
+            {pieces.map((p) => {
+              const d = feedingLatchPath(p, ty);
+              if (!d) return null;
+              return (
+                <path
+                  key={`${p.id}-feeding-latch`}
+                  className="feeding-latch"
                   d={d}
                   pointerEvents="none"
                 />

@@ -31,6 +31,9 @@ class EdgePart(BaseModel):
     ingress_depth: float = Field(30.0, gt=0, le=200)
     ingress_length: float = Field(40.0, gt=0, le=400)
     ingress_remove_right_rim: bool = False
+    feeding_door: bool = False
+    feeding_opening: float = Field(70.0, gt=0, le=400)
+    feeding_depth: float = Field(40.0, gt=0, le=200)
 
     @model_validator(mode="after")
     def resolve_join_alias(self):
@@ -65,6 +68,18 @@ class EdgePart(BaseModel):
                 raise ValueError(
                     f"ingress_length {self.ingress_length} (+miters) overlaps end "
                     f"joins/corners or exceeds length {self.length}"
+                )
+
+        if self.feeding_door and self.lid_ingress:
+            raise ValueError("feeding door and lid ingress cannot share one piece")
+
+        if self.feeding_door:
+            spline_w = 12.2
+            bay = self.feeding_opening + 2 * spline_w
+            if bay + 4 > self.length - clear_s - clear_f:
+                raise ValueError(
+                    f"feeding opening {self.feeding_opening} (bay {bay}) does not "
+                    f"fit in length {self.length}"
                 )
 
         if self.cord_under and self.cord_under_gap_len >= self.length - clear_s - clear_f:

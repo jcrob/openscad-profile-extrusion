@@ -49,6 +49,17 @@
 //   underside so the Z-run channel continues through the arms. When
 //   remove_right_rim, Z also gets a second 45° miter at each arm’s outer Z.
 //
+// feeding_door / feeding_opening / feeding_depth
+//   Dual spline feeding door. Outer U uses the same no-right-rim spline as
+//   ingress (continuous with the main tank screen) but does NOT break the
+//   sit-on-glass rim. Inner door is a spline-only rectangle joined with a
+//   BOSL2-style print-in-place knuckle hinge. Sit-on latch on the door;
+//   pocket on the inner face of the outer back wall.
+//   feeding_opening: clear inner opening along the piece (mm).
+//   feeding_depth: inner cavity into the tank (mm).
+//   Bay along the piece = opening + 2×spline width.
+//   Cannot share a piece/arm with lid ingress.
+//
 // ALSO: rim_corner_assembly(length_a, length_b, ...)
 //   One fused L: length_a along +Z, length_b along -X, joined by a 45° miter.
 //   Free ends use join_a / join_b: 0=none, 1=male, 2=female.
@@ -742,6 +753,8 @@ module edge_lid_ingress(length, depth, bay_len, remove_right_rim = false, z_cent
     }
 }
 
+include <feeding_door.scad>
+
 // ---------------------------------------------------------------------------
 // 45° mitered corner arms (same edge profile — not separate corner_solid)
 //
@@ -1043,6 +1056,11 @@ module rim_piece_assembly(
     ingress_remove_right_rim = undef,
     glass_sit = undef,
     ingress_z_center = undef,
+    // Feeding door
+    feeding_door = undef,
+    feeding_opening = undef,
+    feeding_depth = undef,
+    feeding_z_center = undef,
     cornerpiecenum = 0,
     // Miter-only ends (no arm) — used by rim_corner_assembly so two segments meet at 45°.
     corner_miter_start = false,
@@ -1069,6 +1087,12 @@ module rim_piece_assembly(
                         ? edge_ingress_remove_right_rim : ingress_remove_right_rim;
     do_glass_sit   = is_undef(glass_sit) ? edge_ingress_glass_sit : glass_sit;
     in_z_center    = is_undef(ingress_z_center) ? edge_ingress_z_center : ingress_z_center;
+
+    do_feed        = (is_undef(feeding_door) ? edge_feeding_enable : feeding_door)
+                        && ((is_undef(feeding_opening) ? edge_feeding_opening : feeding_opening) > 0);
+    feed_open      = is_undef(feeding_opening) ? edge_feeding_opening : feeding_opening;
+    feed_dep       = is_undef(feeding_depth) ? edge_feeding_depth : feeding_depth;
+    feed_zc        = is_undef(feeding_z_center) ? edge_feeding_z_center : feeding_z_center;
 
     kind_start  = edge_join_start_kind(join_ends);
     kind_finish = edge_join_finish_kind(join_ends);
@@ -1111,9 +1135,11 @@ module rim_piece_assembly(
         }
     }
 
-    if (do_cord_under) {
-        assert(under_gap_len < length - clear_start - clear_finish,
-            "cord_under gap must fit between end accessories");
+    if (do_feed) {
+        assert(!do_ingress, "feeding door and lid ingress cannot share one piece");
+        assert(feeding_bay(feed_open) + 4 <= length - clear_start - clear_finish,
+            str("feeding door bay ", feeding_bay(feed_open),
+                " mm does not fit in length ", length));
     }
 
     difference() {
@@ -1132,12 +1158,21 @@ module rim_piece_assembly(
                 if (do_cord_under)
                     edge_cord_under_cut(length, under_gap_len, edge_cord_under_keep_below);
 
+                if (do_feed)
+                    edge_feeding_spline_cut_only(length, feed_open, feed_dep, feed_zc);
+
                 // 45° end miters (standalone arm and/or mating segment)
                 if (miter_start)
                     rim_corner_start_miter_cut(arm_len);
                 if (miter_finish)
                     rim_corner_finish_miter_cut(length, arm_len);
             }
+
+            if (do_feed)
+                edge_feeding_door(
+                    length, feed_open, feed_dep, feed_zc,
+                    clear_start = clear_start, clear_finish = clear_finish
+                );
 
             if (do_cord_hole)
                 edge_cord_hole_feature(
@@ -1252,7 +1287,12 @@ module rim_corner_assembly(
     ingress_remove_right_rim = undef,
     glass_sit = undef,
     ingress_z_center = undef,
-    ingress_on = "a"      // "a" | "b"
+    ingress_on = "a",     // "a" | "b"
+    feeding_door = undef,
+    feeding_opening = undef,
+    feeding_depth = undef,
+    feeding_z_center = undef,
+    feeding_on = "a"      // "a" | "b"
 ) {
     assert(join_a == 0 || join_a == 1 || join_a == 2, "join_a must be 0|1|2");
     assert(join_b == 0 || join_b == 1 || join_b == 2, "join_b must be 0|1|2");
@@ -1263,6 +1303,8 @@ module rim_corner_assembly(
         "ingress_on must be \"a\" or \"b\"");
     assert(cord_under_on == "a" || cord_under_on == "b",
         "cord_under_on must be \"a\" or \"b\"");
+    assert(feeding_on == "a" || feeding_on == "b",
+        "feeding_on must be \"a\" or \"b\"");
 
     in_len_raw = is_undef(ingress_length) ? edge_ingress_length : ingress_length;
     in_depth   = is_undef(ingress_depth) ? edge_ingress_depth : ingress_depth;
@@ -1283,6 +1325,14 @@ module rim_corner_assembly(
     under_on_b   = do_under && cord_under_on == "b";
     ingress_on_a = do_ingress && ingress_on == "a";
     ingress_on_b = do_ingress && ingress_on == "b";
+
+    feed_open = is_undef(feeding_opening) ? edge_feeding_opening : feeding_opening;
+    feed_dep  = is_undef(feeding_depth) ? edge_feeding_depth : feeding_depth;
+    feed_zc   = is_undef(feeding_z_center) ? undef : feeding_z_center;
+    do_feed   = (is_undef(feeding_door) ? edge_feeding_enable : feeding_door)
+                    && (feed_open > 0);
+    feed_on_a = do_feed && feeding_on == "a";
+    feed_on_b = do_feed && feeding_on == "b";
 
     hole_inner_d = is_undef(cord_hole_inner_d) ? edge_cord_hole_inner_d : cord_hole_inner_d;
     hole_pos     = is_undef(cord_hole_pos) ? edge_cord_hole_pos : cord_hole_pos;
@@ -1310,6 +1360,13 @@ module rim_corner_assembly(
                 "; bay=", bay_len, " z=[", z0_b, ",", z1_b, "])"));
     }
 
+    if (feed_on_b) {
+        assert(!ingress_on_b, "feeding door and lid ingress cannot share arm B");
+        assert(feeding_bay(feed_open) + 4 <= free_len_b,
+            str("feeding door bay ", feeding_bay(feed_open),
+                " mm does not fit in free length ", free_len_b));
+    }
+
     // Integrated corner arm on A (original B corner miter from rim_corner_arm_finish).
     // Ingress on B: bay-cut the free arm first, then union ingress arms/back so
     // the bay cutter cannot slice the perpendicular miters (kept the A↔B corner).
@@ -1332,7 +1389,11 @@ module rim_corner_assembly(
                         ingress_length = ingress_on_a ? in_len_raw : 0,
                         ingress_remove_right_rim = ingress_remove_right_rim,
                         glass_sit = glass_sit,
-                        ingress_z_center = ingress_z_center
+                        ingress_z_center = ingress_z_center,
+                        feeding_door = feed_on_a,
+                        feeding_opening = feed_on_a ? feed_open : 0,
+                        feeding_depth = feed_dep,
+                        feeding_z_center = feed_zc
                     );
 
                     if (cord_on_b)
@@ -1353,6 +1414,10 @@ module rim_corner_assembly(
                 if (under_on_b)
                     rim_corner_b_free(length_a)
                         edge_cord_under_cut(free_len_b, under_gap, edge_cord_under_keep_below);
+
+                if (feed_on_b)
+                    rim_corner_b_free(length_a)
+                        edge_feeding_spline_cut_only(free_len_b, feed_open, feed_dep, feed_zc);
             }
 
             // Perpendicular ingress arms + back — unioned after the bay cut.
@@ -1361,6 +1426,10 @@ module rim_corner_assembly(
                     edge_ingress_arms_back(
                         z0_b, z1_b, in_depth, bay_len, in_no_rim, do_glass
                     );
+
+            if (feed_on_b)
+                rim_corner_b_free(length_a)
+                    edge_feeding_door(free_len_b, feed_open, feed_dep, feed_zc);
 
             if (join_a == 1)
                 edge_end_join(z_pos = edge_join_z_start("male"), kind = "male");
@@ -1393,7 +1462,11 @@ module edgereplica(
     ingress_remove_right_rim = undef,
     glass_sit = undef,
     ingress_z_center = undef,
-    cornerpiecenum = 0
+    cornerpiecenum = 0,
+    feeding_door = undef,
+    feeding_opening = undef,
+    feeding_depth = undef,
+    feeding_z_center = undef
 ) {
     rim_piece_assembly(
         length = length,
@@ -1410,6 +1483,10 @@ module edgereplica(
         ingress_remove_right_rim = ingress_remove_right_rim,
         glass_sit = glass_sit,
         ingress_z_center = ingress_z_center,
-        cornerpiecenum = cornerpiecenum
+        cornerpiecenum = cornerpiecenum,
+        feeding_door = feeding_door,
+        feeding_opening = feeding_opening,
+        feeding_depth = feeding_depth,
+        feeding_z_center = feeding_z_center
     );
 }

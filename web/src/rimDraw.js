@@ -1,8 +1,11 @@
 // Top-down plan matching rim_piece_assembly:
 // - Ingress: rim U-walls around the inner cut; cavity is wrap background.
 // - Cord hole: outer-Ø boss fused to the inner flange edge, inner bore open.
+// - Feeding door: spline-width outer U (glass-sit unbroken), inner spline
+//   rectangle, hinge on the main rim, sit-on latch on the outer back wall.
 
-import { featHasIngress } from "./rimModel.js";
+import { featHasFeeding, featHasIngress } from "./rimModel.js";
+import { SPLINE_W } from "./blowoutLayout.js";
 
 const CORD_FUSE = 2;
 
@@ -24,7 +27,7 @@ export function worldBounds(pieces, gw, gd, pad = 40) {
         grow(s.cx - s.outer_r, s.cz - s.outer_r);
         grow(s.cx + s.outer_r, s.cz + s.outer_r);
       }
-      if (s.kind === "ingress") {
+      if (s.kind === "ingress" || s.kind === "feeding") {
         for (const pt of [s.outer.left, s.outer.farL, s.outer.farR, s.outer.right]) {
           grow(pt[0], pt[1]);
         }
@@ -147,6 +150,39 @@ export function ingressGeometry(arm, opening, depth) {
   };
 }
 
+/**
+ * Dual spline feeding door: outer U uses inner-spline width (not the glass
+ * sit). Glass-sit on the main bar stays continuous. Inner door is a spline
+ * rectangle inside the U, hinged on the main rim, latched on the back wall.
+ */
+export function feedingGeometry(arm, opening, depth) {
+  const wall = SPLINE_W;
+  const gap = 1.2;
+  const innerHalf = Math.min(Math.max(opening, 2), arm.length * 0.9) / 2;
+  const outerHalf = Math.min(innerHalf + wall, arm.length * 0.49);
+  const innerDepth = Math.max(depth, 8);
+  const outerDepth = innerDepth + wall;
+  const inset = 1.2;
+  const doorOuterHalf = Math.max(innerHalf - gap, wall + 2);
+  const doorInnerHalf = Math.max(doorOuterHalf - wall, 2);
+  const doorOuterDepth = Math.max(innerDepth - gap, wall * 2 + 4);
+  const doorInnerDepth = Math.max(doorOuterDepth - 2 * wall, 4);
+  const doorNear = inset - gap;
+  return {
+    wall,
+    opening: innerHalf * 2,
+    bay: outerHalf * 2,
+    inner: uCorners(arm, innerHalf, innerDepth, inset),
+    outer: uCorners(arm, outerHalf, outerDepth, inset),
+    doorOuter: uCorners(arm, doorOuterHalf, doorOuterDepth, doorNear),
+    doorInner: uCorners(arm, doorInnerHalf, doorInnerDepth, doorNear - wall),
+    hinge: {
+      a: alongInner(arm, 0.5 - doorOuterHalf / arm.length),
+      b: alongInner(arm, 0.5 + doorOuterHalf / arm.length),
+    },
+  };
+}
+
 export function ingressUDetour(arm, bay, depth) {
   return uCorners(arm, Math.min(bay, arm.length * 0.9) / 2, depth);
 }
@@ -174,6 +210,17 @@ export function featureShapes(piece) {
         Math.max(16, f.ingress_depth || 30)
       );
       shapes.push({ kind: "ingress", ...u, opens: true, hollow: true });
+    }
+  }
+  if (featHasFeeding(f)) {
+    const arm = pickArm(piece, f.feeding_on || "a");
+    if (arm) {
+      const u = feedingGeometry(
+        arm,
+        f.feeding_opening,
+        Math.max(16, f.feeding_depth || 40)
+      );
+      shapes.push({ kind: "feeding", ...u, opens: true, hollow: true });
     }
   }
   if (f.cord_hole) {
@@ -219,6 +266,72 @@ export function ingressWallPath(piece, ty) {
     .join(" ");
 }
 
+export function feedingWallPoints(s) {
+  return ingressWallPoints(s);
+}
+
+export function feedingDoorFramePoints(s) {
+  const o = s.doorOuter;
+  const i = s.doorInner;
+  return [o.left, o.farL, o.farR, o.right, i.right, i.farR, i.farL, i.left];
+}
+
+export function feedingWallPath(piece, ty) {
+  return featureShapes(piece)
+    .filter((s) => s.kind === "feeding")
+    .map((s) => lPath(feedingWallPoints(s), ty))
+    .join(" ");
+}
+
+export function feedingDoorPath(piece, ty) {
+  return featureShapes(piece)
+    .filter((s) => s.kind === "feeding")
+    .map((s) => lPath(feedingDoorFramePoints(s), ty))
+    .join(" ");
+}
+
+export function feedingHingePath(piece, ty) {
+  return featureShapes(piece)
+    .filter((s) => s.kind === "feeding" && s.hinge)
+    .map((s) => {
+      const [x0, z0] = s.hinge.a;
+      const [x1, z1] = s.hinge.b;
+      return `M ${x0} ${ty(z0)} L ${x1} ${ty(z1)}`;
+    })
+    .join(" ");
+}
+
+export function feedingLatchPoints(s) {
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const m = mid(s.inner.farL, s.inner.farR);
+  const { ax, az } = armAlongFromQuad(s);
+  const hw = 5;
+  const sit = 3.2;
+  const [ix, iz] = [s.outer.farL[0] - s.inner.farL[0], s.outer.farL[1] - s.inner.farL[1]];
+  const len = Math.hypot(ix, iz) || 1;
+  const nx = ix / len;
+  const nz = iz / len;
+  const left = [m[0] - ax * hw + nx * 0.4, m[1] - az * hw + nz * 0.4];
+  const right = [m[0] + ax * hw + nx * 0.4, m[1] + az * hw + nz * 0.4];
+  const farL = [left[0] + nx * sit, left[1] + nz * sit];
+  const farR = [right[0] + nx * sit, right[1] + nz * sit];
+  return [left, farL, farR, right];
+}
+
+function armAlongFromQuad(s) {
+  const dx = s.outer.right[0] - s.outer.left[0];
+  const dz = s.outer.right[1] - s.outer.left[1];
+  const len = Math.hypot(dx, dz) || 1;
+  return { ax: dx / len, az: dz / len };
+}
+
+export function feedingLatchPath(piece, ty) {
+  return featureShapes(piece)
+    .filter((s) => s.kind === "feeding")
+    .map((s) => lPath(feedingLatchPoints(s), ty))
+    .join(" ");
+}
+
 export function openingFills(piece) {
   const out = [];
   for (const s of featureShapes(piece)) {
@@ -231,6 +344,18 @@ export function openingFills(piece) {
       out.push({
         kind: "poly",
         points: [s.inner.left, s.inner.farL, s.inner.farR, s.inner.right],
+      });
+    }
+    if (s.kind === "feeding") {
+      const arm = pickArm(piece, piece.feat?.feeding_on || "a");
+      if (arm) out.push({ kind: "rect", ...feedingSplineSlot(arm, s.bay) });
+      out.push({
+        kind: "poly",
+        points: [s.inner.left, s.inner.farL, s.inner.farR, s.inner.right],
+      });
+      out.push({
+        kind: "poly",
+        points: [s.doorInner.left, s.doorInner.farL, s.doorInner.farR, s.doorInner.right],
       });
     }
   }
@@ -254,6 +379,29 @@ export function rimBaySlot(arm, opening) {
     x: Math.min(arm.x, arm.innerAt) - pad,
     z: cz - half,
     w: arm.thick + 2 * pad,
+    h: half * 2,
+  };
+}
+
+/** Spline-only gap on the inner flange — glass-sit band of the bar stays solid. */
+export function feedingSplineSlot(arm, bay) {
+  const half = Math.min(bay, arm.length * 0.9) / 2;
+  const [cx, cz] = alongCenter(arm, 0.5);
+  const sw = SPLINE_W;
+  if (arm.axis === "x") {
+    const z0 = Math.min(arm.innerAt, arm.innerAt - arm.inZ * sw);
+    return {
+      x: cx - half,
+      z: z0,
+      w: half * 2,
+      h: sw,
+    };
+  }
+  const x0 = Math.min(arm.innerAt, arm.innerAt - arm.inX * sw);
+  return {
+    x: x0,
+    z: cz - half,
+    w: sw,
     h: half * 2,
   };
 }

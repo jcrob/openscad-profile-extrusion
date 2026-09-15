@@ -501,6 +501,26 @@ label.field.checkbox {
   stroke: none;
 }
 
+.blowout-svg-wrap .piece.feeding-door {
+  fill: #7ad0a4;
+}
+
+.blowout-svg-wrap .piece.feeding-door.selected {
+  stroke: none;
+}
+
+.blowout-svg-wrap .feeding-hinge {
+  fill: none;
+  stroke: #0b100e;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.blowout-svg-wrap .feeding-latch {
+  fill: #2a7a52;
+  stroke: none;
+}
+
 .blowout-svg-wrap .feat-ingress {
   fill: #0b100e;
   stroke: #7ad0a4;
