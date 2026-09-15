@@ -108,15 +108,18 @@ function armAlong(arm) {
   };
 }
 
-function uCorners(arm, half, depth) {
-  const [ix, iz] = alongInner(arm, 0.5);
+function uCorners(arm, half, depth, inset = 0) {
+  const [ix0, iz0] = alongInner(arm, 0.5);
+  const ix = ix0 - arm.inX * inset;
+  const iz = iz0 - arm.inZ * inset;
   const { ax, az } = armAlong(arm);
   const left = [ix - ax * half, iz - az * half];
   const right = [ix + ax * half, iz + az * half];
+  const far = depth + inset;
   return {
     left,
-    farL: [left[0] + arm.inX * depth, left[1] + arm.inZ * depth],
-    farR: [right[0] + arm.inX * depth, right[1] + arm.inZ * depth],
+    farL: [left[0] + arm.inX * far, left[1] + arm.inZ * far],
+    farR: [right[0] + arm.inX * far, right[1] + arm.inZ * far],
     right,
     depth,
     span: half * 2,
@@ -134,12 +137,13 @@ export function ingressGeometry(arm, opening, depth) {
   const outerHalf = Math.min(innerHalf + wall, arm.length * 0.49);
   const innerDepth = Math.max(depth, 8);
   const outerDepth = innerDepth + wall;
+  const inset = 1.2;
   return {
     wall,
     opening: innerHalf * 2,
     bay: outerHalf * 2,
-    inner: uCorners(arm, innerHalf, innerDepth),
-    outer: uCorners(arm, outerHalf, outerDepth),
+    inner: uCorners(arm, innerHalf, innerDepth, inset),
+    outer: uCorners(arm, outerHalf, outerDepth, inset),
   };
 }
 
@@ -222,8 +226,6 @@ export function openingFills(piece) {
       out.push({ kind: "circle", cx: s.cx, cz: s.cz, r: s.inner_r });
     }
     if (s.kind === "ingress") {
-      const arm = pickArm(piece, piece.feat?.ingress_on || "a");
-      if (arm) out.push({ kind: "rect", ...rimBaySlot(arm, s.opening) });
       out.push({
         kind: "poly",
         points: [s.inner.left, s.inner.farL, s.inner.farR, s.inner.right],
